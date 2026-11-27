@@ -3,9 +3,11 @@
 class_name Box
 extends PixelSprite
 
+const Art := preload("res://scripts/art_data.gd")
 const TEX_CLOSED := preload("res://assets/sprites/box_closed.png")
 const TEX_OPEN := preload("res://assets/sprites/box_open.png")
 
+var wpos := Vector3.ZERO
 var contents: Array = []   # id предметов, последний достаётся первым
 var opened := false
 var loose_item: Item = null
@@ -13,22 +15,17 @@ var removed := false
 
 
 func _ready() -> void:
-	set_tex(TEX_CLOSED)
+	set_tex(TEX_CLOSED, Art.BOX["anchor_closed"])
 
 
 func open() -> void:
 	opened = true
-	set_tex(TEX_OPEN)
-	squash(0.25)
+	set_tex(TEX_OPEN, Art.BOX["anchor_open"])
+	squash(0.2)
 
 
-func top_y() -> int:
-	# верх проёма открытой коробки (створки не считаем)
-	return int(position.y) - 26 + 1
-
-
-func is_empty() -> bool:
-	return contents.is_empty() and loose_item == null
+func hover_point() -> Vector3:
+	return wpos + Vector3(0, 0, Art.BOX["h"] + 4)
 
 
 func shake() -> void:

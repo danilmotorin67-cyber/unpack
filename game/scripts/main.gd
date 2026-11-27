@@ -1,29 +1,29 @@
-# Главная сцена: строит уровень из данных, обрабатывает мышь,
+# Главная сцена: строит изометрическую комнату, обрабатывает мышь,
 # раскладывает предметы по поверхностям и проверяет, всё ли на месте.
 extends Node2D
 
 const Level := preload("res://scripts/levels/level_01.gd")
+const Art := preload("res://scripts/art_data.gd")
 const CURSOR_ARROW := preload("res://assets/sprites/cursor_arrow.png")
 const CURSOR_HAND := preload("res://assets/sprites/cursor_hand.png")
 const CURSOR_GRAB := preload("res://assets/sprites/cursor_grab.png")
 
-const Z_BG := 0
-const Z_BOX := 5
-const Z_ITEM := 10
-const Z_DOOR := 20
-const Z_LOOSE := 30
-const Z_DRAG := 50
-const Z_UI := 90
-const Z_CURSOR := 100
+const VIEW := Vector2(480, 270)
 
-# Насколько далеко (по вертикали) от поверхности можно отпустить предмет,
-# чтобы он на неё «сел». Отрицательное — низ предмета ниже поверхности.
-const SNAP_ABOVE := 22
-const SNAP_BELOW := 8
-const MAX_NUDGE := 24   # насколько можно сдвинуть вбок, чтобы не перекрыть соседа
+# Слои: фон -> объекты в комнате (сортируются по глубине) -> висящие/тащимые вещи -> UI
+const Z_BG := -100
+const Z_WORLD := 0           # + глубина (x + y), до ~300
+const Z_LOOSE := 1000
+const Z_DRAG := 1100
+const Z_UI := 2000
+const Z_CURSOR := 3000
+
+const SNAP_TOLERANCE := 3.0  # насколько можно промахнуться мимо края поверхности (мировые ед.)
+const MAX_NUDGE := 12        # насколько можно сдвинуть вещь, чтобы не перекрыть соседей
+const GAP := 0.5             # минимальный зазор между вещами
 
 var data: Dictionary = Level.DATA
-var zones: Array = []
+var zones: Array = Art.ZONES
 var containers := {}        # id -> {data, sprite, open}
 var items: Array[Item] = []
 var boxes: Array[Box] = []
@@ -39,11 +39,13 @@ var first_item_placed := false
 var cursor: Sprite2D
 var hint: PixelText
 var banner: Node2D
+var _nudges: Array[Vector2] = []
 
 
 func _ready() -> void:
 	randomize()
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+	_prepare_nudges()
 	_build_level()
 	_build_ui()
 	_show_title()
@@ -58,43 +60,41 @@ func _build_level() -> void:
 	bg.z_index = Z_BG
 	add_child(bg)
 
-	zones = data["zones"]
-
 	for c in data["containers"]:
 		var s := PixelSprite.new()
-		s.set_tex(load(c["closed"]))
-		s.offset = Vector2.ZERO  # у дверей точка опоры — левый верхний угол
-		s.position = c["closed_pos"]
-		s.z_index = Z_DOOR
 		add_child(s)
-		containers[c["id"]] = {"data": c, "sprite": s, "open": false}
+		containers[c["id"]] = {"data": c, "sprite": s, "open": false, "art": Art.DOORS[c["id"]]}
+		_apply_container(c["id"])
 
 	var item_defs: Dictionary = data["items"]
 	for b in data["boxes"]:
 		var box := Box.new()
-		box.position = Vector2(b["x"], b["y"])
-		box.z_index = Z_BOX
+		box.wpos = Vector3(b["x"], b["y"], 0)
+		box.position = Iso.to_screen(box.wpos)
+		box.z_index = Z_WORLD + Iso.depth(box.wpos)
 		add_child(box)
 		var ids: Array = b["items"].duplicate()
 		ids.shuffle()
 		box.contents = ids
 		boxes.append(box)
 		for id in ids:
+			var info: Dictionary = Art.ITEMS[id]
 			var it := Item.new()
 			it.id = id
 			it.allowed = item_defs[id]["allowed"]
-			it.set_tex(load("res://assets/sprites/item_%s.png" % id))
+			it.foot = info["foot"]
+			it.height = info["h"]
+			it.set_tex(load("res://assets/sprites/item_%s.png" % id), info["anchor"])
 			it.visible = false
-			it.z_index = Z_ITEM
 			add_child(it)
 			items.append(it)
 
 
 func _build_ui() -> void:
 	hint = PixelText.new()
-	hint.position = Vector2(160, 3)
+	hint.position = Vector2(VIEW.x / 2, 5)
 	hint.color = Color("2e2430")
-	hint.shadow_color = Color("e2cfb0")
+	hint.shadow_color = Color("e3d3b3")
 	hint.z_index = Z_UI
 	add_child(hint)
 
@@ -108,32 +108,32 @@ func _build_ui() -> void:
 func _make_banner(title: String, subtitle: String) -> Node2D:
 	var root := Node2D.new()
 	root.z_index = Z_UI
+	var top := 116.0
+	var h := 38.0 if subtitle != "" else 30.0
 	var band := ColorRect.new()
 	band.color = Color("2e2430")
-	band.position = Vector2(0, 70)
-	band.size = Vector2(320, 38 if subtitle != "" else 30)
+	band.position = Vector2(0, top)
+	band.size = Vector2(VIEW.x, h)
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(band)
-	var line := ColorRect.new()
-	line.color = Color("e6be6e")
-	line.position = Vector2(0, 71)
-	line.size = Vector2(320, 1)
-	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(line)
-	var line2 := line.duplicate() as ColorRect
-	line2.position = Vector2(0, band.position.y + band.size.y - 2)
-	root.add_child(line2)
+	for y in [top + 1, top + h - 2]:
+		var line := ColorRect.new()
+		line.color = Color("ecc97a")
+		line.position = Vector2(0, y)
+		line.size = Vector2(VIEW.x, 1)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(line)
 	var t := PixelText.new()
 	t.text = title
 	t.scale = Vector2(2, 2)
-	t.position = Vector2(160, 77)
+	t.position = Vector2(VIEW.x / 2, top + 7)
 	t.shadow = false
 	root.add_child(t)
 	if subtitle != "":
 		var s := PixelText.new()
 		s.text = subtitle
-		s.position = Vector2(160, 95)
-		s.color = Color("c9b08e")
+		s.position = Vector2(VIEW.x / 2, top + 25)
+		s.color = Color("cdb995")
 		s.shadow = false
 		root.add_child(s)
 	add_child(root)
@@ -171,29 +171,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mp := get_global_mouse_position().floor()
 		if event.pressed:
 			_press(mp)
-		else:
-			_release(mp)
+		elif dragging:
+			_drop(dragging)
+			dragging = null
 
 
 func _press(mp: Vector2) -> void:
-	var it := _item_at(mp)
-	if it:
-		_start_drag(it, mp)
+	if level_done:
 		return
-	for id in containers:
-		var c: Dictionary = containers[id]
-		if (c["sprite"] as PixelSprite).hit(mp):
-			_toggle_container(id)
-			return
-	var box := _box_at(mp)
-	if box:
-		_click_box(box)
-
-
-func _release(_mp: Vector2) -> void:
-	if dragging:
-		_drop(dragging)
-		dragging = null
+	var target := _object_at(mp)
+	if target is Item:
+		_start_drag(target, mp)
+	elif target is Box:
+		_click_box(target)
+	elif target != null:
+		for id in containers:
+			if containers[id]["sprite"] == target:
+				_toggle_container(id)
 
 
 func _process(_delta: float) -> void:
@@ -208,13 +202,7 @@ func _process(_delta: float) -> void:
 func _update_hover(mp: Vector2) -> void:
 	var h: Node = null
 	if not dragging and not level_done:
-		h = _item_at(mp)
-		if h == null:
-			for id in containers:
-				if containers[id]["sprite"].hit(mp):
-					h = containers[id]["sprite"]
-			if h == null:
-				h = _box_at(mp)
+		h = _object_at(mp)
 	if h != hovered:
 		if hovered and is_instance_valid(hovered):
 			hovered.set_outline(false)
@@ -232,26 +220,25 @@ func _update_hover(mp: Vector2) -> void:
 		cursor.offset = Vector2.ZERO
 
 
-# ------------------------------------------------------------------ поиск под мышью
+# ------------------------------------------------------------------ что под мышью
 
-func _item_at(mp: Vector2) -> Item:
-	var best: Item = null
+# Самый верхний (по z_index) интерактивный объект под курсором.
+func _object_at(mp: Vector2) -> Node:
+	var best: PixelSprite = null
+	var candidates: Array = []
 	for it in items:
-		if it.state == Item.State.IN_BOX or not it.visible:
-			continue
-		if _hidden_in_container(it):
-			continue
-		if it.hit(mp):
-			if best == null or it.z_index > best.z_index or (it.z_index == best.z_index and it.get_index() > best.get_index()):
-				best = it
-	return best
-
-
-func _box_at(mp: Vector2) -> Box:
+		if it.state != Item.State.IN_BOX and it.visible and not _hidden_in_container(it):
+			candidates.append(it)
 	for box in boxes:
-		if not box.removed and box.hit(mp):
-			return box
-	return null
+		if not box.removed:
+			candidates.append(box)
+	for id in containers:
+		candidates.append(containers[id]["sprite"])
+	for c in candidates:
+		var s: PixelSprite = c
+		if s.hit(mp) and (best == null or s.z_index > best.z_index or (s.z_index == best.z_index and s.get_index() > best.get_index())):
+			best = s
+	return best
 
 
 func _hidden_in_container(it: Item) -> bool:
@@ -272,6 +259,7 @@ func _click_box(box: Box) -> void:
 		return
 	if box.contents.is_empty():
 		box.fold_away()
+		hovered = null
 		return
 	var it: Item = _find_item(box.contents.pop_back())
 	it.visible = true
@@ -279,15 +267,17 @@ func _click_box(box: Box) -> void:
 	it.from_box = box
 	it.z_index = Z_LOOSE
 	box.loose_item = it
-	var target := Vector2(box.position.x, box.top_y() - 3)
-	it.home = target
+	it.wpos = box.hover_point()
+	it.home = it.wpos
 	it.home_state = Item.State.LOOSE
-	it.position = Vector2(target.x, box.top_y() + it.art_h / 2)
-	it.scale = Vector2(0.6, 0.6)
+	it.home_zone = {}
+	var target := Iso.to_screen(it.wpos).round()
+	it.position = Iso.to_screen(box.wpos + Vector3(0, 0, 8)).round()
+	it.scale = Vector2(0.5, 0.5)
 	var t := it.new_tween().set_parallel()
 	t.tween_property(it, "position", target, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	t.tween_property(it, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	box.squash(0.12, 0.15)
+	box.squash(0.1, 0.15)
 	if not first_item_taken:
 		first_item_taken = true
 		hint.text = "ПЕРЕТАЩИ ВЕЩЬ НА ЕЁ МЕСТО"
@@ -300,17 +290,22 @@ func _find_item(id: String) -> Item:
 	return null
 
 
-func _toggle_container(id: String) -> void:
+func _apply_container(id: String) -> void:
 	var c: Dictionary = containers[id]
-	c["open"] = not c["open"]
-	var s: PixelSprite = c["sprite"]
 	var d: Dictionary = c["data"]
-	s.texture = load(d["open"] if c["open"] else d["closed"])
-	s.position = d["open_pos"] if c["open"] else d["closed_pos"]
-	# hit() нужен свежий Image
-	s.set_tex(s.texture)
-	s.offset = Vector2.ZERO
+	var art: Dictionary = c["art"]
+	var s: PixelSprite = c["sprite"]
+	s.set_tex(load(d["open"] if c["open"] else d["closed"]), Vector2.ZERO)
+	s.position = art["open_pos"] if c["open"] else art["closed_pos"]
+	s.z_index = Z_WORLD + int(art["open_depth"] if c["open"] else art["closed_depth"])
+
+
+func _toggle_container(id: String) -> void:
+	containers[id]["open"] = not containers[id]["open"]
+	_apply_container(id)
+	var s: PixelSprite = containers[id]["sprite"]
 	s.set_outline(false)
+	s.squash(0.05, 0.12)
 	hovered = null
 
 
@@ -321,9 +316,11 @@ func _start_drag(it: Item, mp: Vector2) -> void:
 	it.stop_tween()
 	it.scale = Vector2.ONE
 	if it.state == Item.State.PLACED:
-		it.home = it.position
+		it.home = it.wpos
 		it.home_state = Item.State.PLACED
+		it.home_zone = it.zone
 	it.state = Item.State.DRAGGED
+	it.zone = {}
 	it.z_index = Z_DRAG
 	it.set_outline(false)
 	drag_offset = it.position - mp
@@ -335,81 +332,93 @@ func _drop(it: Item) -> void:
 	if spot.is_empty():
 		_return_home(it)
 		return
-	var z: Dictionary = spot["zone"]
-	var target: Vector2 = spot["pos"]
 	if it.from_box:
 		it.from_box.loose_item = null
 		it.from_box = null
-	it.state = Item.State.PLACED
-	it.zone = z
-	it.z_index = Z_ITEM
-	var t := it.new_tween()
-	t.tween_property(it, "position", target, 0.06)
-	t.tween_callback(it.squash.bind(0.2, 0.2))
+	_place(it, spot["zone"], spot["pos"])
 	if not first_item_placed:
 		first_item_placed = true
 		hint.text = ""
 	_check_level()
 
 
+func _place(it: Item, z: Dictionary, wpos: Vector3) -> void:
+	it.state = Item.State.PLACED
+	it.zone = z
+	it.wpos = wpos
+	it.z_index = Z_WORLD + Iso.depth(wpos)
+	var t := it.new_tween()
+	t.tween_property(it, "position", Iso.to_screen(wpos).round(), 0.06)
+	t.tween_callback(it.squash.bind(0.2, 0.2))
+
+
 func _return_home(it: Item) -> void:
 	it.state = it.home_state
-	it.z_index = Z_LOOSE if it.home_state == Item.State.LOOSE else Z_ITEM
+	it.zone = it.home_zone
+	it.wpos = it.home
+	it.z_index = Z_LOOSE if it.home_state == Item.State.LOOSE else Z_WORLD + Iso.depth(it.home)
 	var t := it.new_tween()
-	t.tween_property(it, "position", it.home, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(it, "position", Iso.to_screen(it.home).round(), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	t.tween_callback(it.squash.bind(0.15, 0.15))
 
 
-# Ищет поверхность под предметом и свободное место на ней.
+# Ищет поверхность под точкой опоры предмета и свободное место на ней.
+# Если под курсором несколько поверхностей, берём ближайшую к зрителю.
 func _find_spot(it: Item) -> Dictionary:
-	var p := it.position
 	var candidates: Array = []
 	for z in zones:
 		var cid: String = z.get("container", "")
 		if cid != "" and not containers[cid]["open"]:
 			continue
-		if p.x < z["x0"] - 4 or p.x > z["x1"] + 4:
+		if it.height > z["max_h"]:
 			continue
-		var dy: float = z["y"] - p.y
-		if dy < -SNAP_BELOW or dy > SNAP_ABOVE:
+		var w := Iso.to_world(it.position, z["z"])
+		var t := SNAP_TOLERANCE
+		if w.x < z["x0"] - t or w.x > z["x1"] + t or w.y < z["y0"] - t or w.y > z["y1"] + t:
 			continue
-		if it.art_h > z["max_h"]:
-			continue
-		candidates.append({"zone": z, "dy": abs(dy)})
-	candidates.sort_custom(func(a, b): return a["dy"] < b["dy"])
+		candidates.append({"zone": z, "w": w, "depth": w.x + w.y + z["z"]})
+	candidates.sort_custom(func(a, b): return a["depth"] > b["depth"])
 	for c in candidates:
-		var x = _free_x(it, c["zone"], int(p.x))
-		if x != null:
-			return {"zone": c["zone"], "pos": Vector2(x, c["zone"]["y"])}
+		var p = _free_pos(it, c["zone"], c["w"])
+		if p != null:
+			return {"zone": c["zone"], "pos": Vector3(p.x, p.y, c["zone"]["z"])}
 	return {}
 
 
-# Ближайшая к желаемой x-позиция, где предмет не перекрывает соседей.
-func _free_x(it: Item, z: Dictionary, want: int) -> Variant:
-	var lo: int = z["x0"] + it.half_left
-	var hi: int = z["x1"] + 1 - it.half_right
-	if lo > hi:
+func _prepare_nudges() -> void:
+	for dx in range(-MAX_NUDGE, MAX_NUDGE + 1):
+		for dy in range(-MAX_NUDGE, MAX_NUDGE + 1):
+			if dx * dx + dy * dy <= MAX_NUDGE * MAX_NUDGE:
+				_nudges.append(Vector2(dx, dy))
+	_nudges.sort_custom(func(a, b): return a.length_squared() < b.length_squared())
+
+
+# Ближайшая к желаемой позиция, где след предмета целиком на поверхности
+# и не пересекается со следами соседей.
+func _free_pos(it: Item, z: Dictionary, want: Vector2) -> Variant:
+	var area := Rect2(z["x0"], z["y0"], z["x1"] - z["x0"], z["y1"] - z["y0"])
+	# допустимый диапазон центра
+	var lo := area.position - it.foot.position
+	var hi := area.end - it.foot.end
+	if lo.x > hi.x or lo.y > hi.y:
 		return null
-	want = clampi(want, lo, hi)
-	var others: Array[Item] = []
+	want = want.clamp(lo, hi).round()
+	var others: Array[Rect2] = []
 	for o in items:
 		if o != it and o.state == Item.State.PLACED and o.zone.get("id") == z["id"]:
-			others.append(o)
-	var options: Array[int] = [want]
-	for o in others:
-		options.append(o.left() - it.half_right)   # вплотную слева
-		options.append(o.right() + it.half_left)   # вплотную справа
-	options.sort_custom(func(a, b): return abs(a - want) < abs(b - want))
-	for x in options:
-		if x < lo or x > hi or abs(x - want) > MAX_NUDGE:
+			others.append(o.foot_at(Vector2(o.wpos.x, o.wpos.y)).grow(GAP))
+	for d in _nudges:
+		var p: Vector2 = want + d
+		if p.x < lo.x or p.y < lo.y or p.x > hi.x or p.y > hi.y:
 			continue
+		var r := it.foot_at(p)
 		var ok := true
 		for o in others:
-			if x - it.half_left < o.right() and o.left() < x + it.half_right:
+			if r.intersects(o):
 				ok = false
 				break
 		if ok:
-			return x
+			return p
 	return null
 
 

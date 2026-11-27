@@ -1,16 +1,20 @@
-"""Генератор пиксель-арта для игры.
+"""Генератор пиксель-арта для игры (изометрия).
 
 Запуск из корня репозитория:
     python3 tools/gen_art.py
 
-Пишет PNG в game/assets/ и шрифт в game/scripts/font_data.gd.
-Каждый спрайт проверяется на соответствие палитре (tools/palette.py).
+Пишет PNG в game/assets/, а геометрию уровня (зоны, якоря спрайтов) —
+в game/scripts/art_data.gd. Каждый спрайт проверяется на палитру.
 """
+import math
 import os
 import sys
 
+import numpy as np
 from PIL import Image
 
+from glyphs import CURSORS, GLYPHS
+from iso import FACE_LEFT, FACE_RIGHT, FACE_TOP, Canvas, Mat, box, cyl, render_sprite, sphere
 from palette import ALLOWED, rgba
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,51 +22,44 @@ SPRITES = os.path.join(ROOT, "game", "assets", "sprites")
 FONT_DIR = os.path.join(ROOT, "game", "assets", "font")
 SCRIPTS = os.path.join(ROOT, "game", "scripts")
 
+VIEW_W, VIEW_H = 480, 270
+ORIGIN = (230, 108)
+
+# Комната
+RW, RD, RH, WALL, SLAB = 150, 130, 85, 6, 6
+COUNTER_H, TOP_H = 36, 39
+
+# ---------------------------------------------------------------- materials
+
+M_WALL_L = Mat(top="C", left="K", right="c", edge="K", hi="W")
+M_WALL_R = Mat(top="C", left="C", right="K", edge="K", hi="W")
+M_FLOOR = Mat(top="f", left="p", right="P", edge="u", hi="q")
+M_SAGE = Mat(top="g", left="G", right="h", edge="H", hi="g")
+M_STOVE = Mat(top="L", left="z", right="Z", edge="o", hi="l")
+M_TOP = Mat(top="j", left="J", right="J", edge="K", hi="W")
+M_WOOD = Mat(top="w", left="v", right="u", edge="o", hi="q")
+M_CREAM = Mat(top="c", left="C", right="k", edge="K", hi="W")
+M_CREAM_IN = Mat(top="c", left="C", right="T", edge="K", hi="W")
+M_FRIDGE_IN = Mat(top="t", left="T", right="T", edge="K")
+M_SHELF_IN = Mat(top="t", left="T", right="T", edge="S", hi="W")
+M_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W")
+
+I_WHITE = Mat(top="W", left="c", right="C", edge="K")
+I_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W")
+I_DARK = Mat(top="m", left="d", right="o", edge="o")
+I_TERRA = Mat(top="i", left="r", right="R", edge="o")
+I_OCHRE = Mat(top="y", left="Y", right="n", edge="o")
+I_BLUE = Mat(top="l", left="L", right="z", edge="o")
+I_GREEN = Mat(top="a", left="e", right="E", edge="o")
+I_WOOD = Mat(top="f", left="w", right="v", edge="u", hi="q")
+I_GLASS = Mat(top="W", left="t", right="T", edge="S")
+I_CARD = Mat(top="b", left="B", right="n", edge="N", hi="y")
+I_CARD_BACK = Mat(top="b", left="n", right="n", edge="N", hi="y")
+I_CARD_SIDE = Mat(top="b", left="B", right="N", edge="N", hi="y")
+I_CARD_FLOOR = Mat(top="N", left="N", right="N", edge="N")
+
 
 # ---------------------------------------------------------------- helpers
-
-def from_map(rows, pad=1):
-    """Спрайт из текстовой карты. '.' — прозрачный. pad — прозрачная рамка
-    (нужна шейдеру обводки)."""
-    w = max(len(r) for r in rows)
-    img = Image.new("RGBA", (w + pad * 2, len(rows) + pad * 2), (0, 0, 0, 0))
-    for y, row in enumerate(rows):
-        for x, ch in enumerate(row):
-            if ch not in ". ":
-                img.putpixel((x + pad, y + pad), rgba(ch))
-    return img
-
-
-class Canvas:
-    def __init__(self, w, h, fill=None):
-        self.img = Image.new("RGBA", (w, h), rgba(fill) if fill else (0, 0, 0, 0))
-        self.w, self.h = w, h
-
-    def px(self, x, y, c):
-        if 0 <= x < self.w and 0 <= y < self.h:
-            self.img.putpixel((x, y), rgba(c))
-
-    def rect(self, x0, y0, x1, y1, c):
-        """Заливка, границы включительно."""
-        for y in range(y0, y1 + 1):
-            for x in range(x0, x1 + 1):
-                self.px(x, y, c)
-
-    def frame(self, x0, y0, x1, y1, c):
-        self.hline(x0, x1, y0, c)
-        self.hline(x0, x1, y1, c)
-        self.vline(x0, y0, y1, c)
-        self.vline(x1, y0, y1, c)
-
-    def hline(self, x0, x1, y, c):
-        self.rect(x0, y, x1, y, c)
-
-    def vline(self, x, y0, y1, c):
-        self.rect(x, y0, x, y1, c)
-
-    def blit(self, sprite, x, y):
-        self.img.alpha_composite(sprite, (x, y))
-
 
 def check_palette(name, img):
     bad = {p for p in list(img.getdata()) if p[3] != 0 and p not in ALLOWED}
@@ -76,585 +73,467 @@ def save(name, img, folder=SPRITES):
     img.save(os.path.join(folder, name + ".png"))
 
 
+def from_map(rows):
+    w = max(len(r) for r in rows)
+    img = Image.new("RGBA", (w, len(rows)), (0, 0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch not in ". ":
+                img.putpixel((x, y), rgba(ch))
+    return img
+
+
+# ---------------------------------------------------------------- kitchen textures
+
+def floor_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP or z < -0.5:
+        return None
+    # коврик
+    if 52 <= x <= 100 and 100 <= y <= 124:
+        if x < 53.5 or x > 98.5:
+            return "c" if int(y) % 2 else "C"
+        if y < 101.5 or y > 122.5:
+            return "H"
+        return "G" if int((x - 52) // 4) % 2 else "h"
+    row = math.floor(y / 7)
+    seam = (y % 7) < 1
+    joint = ((x + row * 17) % 36) < 1
+    seg = math.floor((x + row * 17) / 36)
+    alt = (row * 7 + seg * 3) % 3 == 0
+    lit = x > 30 and (40 + 0.3 * x) < y < (93 + 0.3 * x)
+    if seam or joint:
+        return "F" if lit else "p"
+    if lit:
+        return "f" if alt else "q"
+    return "F" if alt else "f"
+
+
+def wall_left_tex(x, y, z, face, k, nz):
+    if face != FACE_RIGHT:
+        return None
+    if z < 3:
+        return "k"
+    # окно
+    if 44 <= y <= 92 and 50 <= z <= 80:
+        if y < 46 or y > 90 or z < 52 or z > 78 or abs(y - 68) < 1 or abs(z - 65) < 0.8:
+            return "W"
+        hill = 58 + 3 * math.sin(y / 4.0) + (y - 44) * 0.05
+        if z < hill - 3:
+            return "E"
+        if z < hill:
+            return "e"
+        if (y - 81) ** 2 + (z - 72) ** 2 < 10:
+            return "y"
+        return "t" if z > 66 else "T"
+    # плитка под окном, над столешницей
+    if 28 <= y <= 108 and TOP_H <= z <= 48:
+        row = int((z - TOP_H) // 4.5)
+        if (z - TOP_H) % 4.5 < 0.8 or ((y + (row % 2) * 4) % 8) < 0.9:
+            return "C"
+        return "W"
+    # часы
+    d = math.hypot(y - 16, z - 68)
+    if d < 6.3:
+        if d > 5.2:
+            return "o"
+        if (abs(y - 16) < 0.6 and 68 <= z < 72.5) or (abs(z - 68) < 0.6 and 16 <= y < 19.5):
+            return "o"
+        return "W"
+    return None
+
+
+def wall_right_tex(x, y, z, face, k, nz):
+    if face != FACE_LEFT:
+        return None
+    if z < 3:
+        return "k"
+    # плитка над столешницей
+    if 0 <= x <= 108 and TOP_H <= z <= 62:
+        row = int((z - TOP_H) // 4.5)
+        if (z - TOP_H) % 4.5 < 0.8 or ((x + (row % 2) * 4.5) % 9) < 0.9:
+            return "k"
+        return "c"
+    # картина
+    if 6 <= x <= 22 and 62 <= z <= 80:
+        if x < 7.5 or x > 20.5 or z < 63.5 or z > 78.5:
+            return "w"
+        if z < 66 + 4 * math.sin((x - 6) / 3):
+            return "e"
+        return "T"
+    return None
+
+
+def door_fronts(u, z, x_mode):
+    """Общий рисунок фасадов: цоколь, ящики, дверцы, ручки. u — координата вдоль фасада."""
+    if z < 3:
+        return "H"
+    if abs(z - 27) < 0.6:
+        return "H"
+    if (u % 20) < 0.9 and u > 1:
+        return "H"
+    if z > 27:
+        if 29.8 < z < 31.4 and abs((u % 20) - 10) < 3:
+            return "s"
+        return None
+    if 15 < z < 22 and abs((u % 20) - 16.5) < 0.7:
+        return "s"
+    if abs(z - 5.5) < 0.5 or abs(z - 24.5) < 0.5:
+        return "h" if x_mode else "h"
+    return None
+
+
+def cab_r_tex(x, y, z, face, k, nz):
+    if face != FACE_LEFT:
+        return None
+    if x > 86:
+        if z < 3 or abs(z - 27) < 0.6 or abs(x - 96.5) < 0.5:
+            return "H"
+        if 29.8 < z < 31.4 and (abs(x - 91.5) < 3 or abs(x - 102) < 3):
+            return "s"
+        if 15 < z < 22 and (abs(x - 94.5) < 0.7 or abs(x - 99) < 0.7):
+            return "s"
+        return None
+    return door_fronts(x, z, False)
+
+
+def cab_l_tex(x, y, z, face, k, nz):
+    if face != FACE_RIGHT:
+        return None
+    return door_fronts(y - 28, z, True)
+
+
+def stove_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT:
+        if z < 3:
+            return "Z"
+        if 63 <= x <= 83 and 7 <= z <= 22:
+            if x < 64 or x > 82 or z < 8 or z > 21:
+                return "o"
+            return "Z" if (x - z) % 9 > 2 else "z"
+        if 64 <= x <= 82 and 24 <= z <= 25.2:
+            return "s"
+        for kx in (65.5, 71.5, 77.5, 83):
+            if (x - kx) ** 2 + (z - 31.5) ** 2 < 1.6:
+                return "S"
+    return None
+
+
+def counter_r_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP:
+        return None
+    if 60.5 <= x <= 85.5 and 1 <= y <= 28:
+        for cx, cy in ((67, 8), (79, 8), (67, 21), (79, 21)):
+            d = math.hypot(x - cx, y - cy)
+            if d < 3.8:
+                return "Z" if d > 2.6 or d < 0.9 else "z"
+        return "L"
+    return None
+
+
+def counter_l_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP:
+        return None
+    if 5 <= x <= 24 and 54 <= y <= 82:
+        if x < 6.2 or x > 22.8 or y < 55.2 or y > 80.8:
+            return "s"
+        if math.hypot(x - 15, y - 70) < 1:
+            return "x"
+        if x < 8 or y < 57.5:
+            return "x"
+        return "S"
+    return None
+
+
+def fridge_base_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT and 1.5 < z < 4.5 and (x % 2) < 0.8 and 116 < x < 138:
+        return "k"
+    return None
+
+
+def fridge_door_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT:
+        if abs(z - 52) < 0.6:
+            return "K"
+        if 137.4 <= x <= 139 and (55 < z < 66 or 38 < z < 49):
+            return "s"
+    return None
+
+
+def fridge_door_inner_tex(x, y, z, face, k, nz):
+    # внутренняя сторона открытой дверцы: полочки
+    if face == FACE_RIGHT and 32.5 < y < 57.5:
+        for bz in (18, 42, 64):
+            if bz <= z <= bz + 4:
+                return "s" if z > bz + 3.2 else "T"
+        if 3 < z < 77:
+            return "t"
+    return None
+
+
+def kitchen_prims():
+    p = []
+    # пол
+    p.append(box(-WALL, -WALL, -SLAB, RW, RD, 0, M_FLOOR, floor_tex))
+    # стены
+    p.append(box(-WALL, -WALL, 0, RW, 0, RH, M_WALL_R, wall_right_tex))
+    p.append(box(-WALL, 0, 0, 0, RD, RH, M_WALL_L, wall_left_tex))
+    # шкафы
+    p.append(box(0, 0, 0, 107, 28, COUNTER_H, M_SAGE, cab_r_tex))
+    p.append(box(0, 28, 0, 28, 107, COUNTER_H, M_SAGE, cab_l_tex))
+    p.append(box(60, 0, 0, 86, 28.6, COUNTER_H, M_STOVE, stove_tex))
+    # столешницы
+    p.append(box(0, 0, COUNTER_H, 108, 30, TOP_H, M_TOP, counter_r_tex))
+    p.append(box(0, 30, COUNTER_H, 30, 108, TOP_H, M_TOP, counter_l_tex))
+    # кран
+    p.append(cyl(3.5, 68, 1, TOP_H, 49, M_METAL))
+    p.append(box(3, 67.3, 47, 10, 68.7, 49, M_METAL))
+    p.append(box(8.6, 67.3, 45, 10, 68.7, 47, M_METAL))
+    # подоконник
+    p.append(box(0, 42, 48, 9, 94, 50.5, M_TOP))
+    # полка и кронштейны
+    p.append(box(25, 0, 70, 100, 15, 73, M_WOOD))
+    p.append(box(30, 0, 63, 32, 11, 70, M_WOOD))
+    p.append(box(93, 0, 63, 95, 11, 70, M_WOOD))
+    # холодильник (корпус, внутри полки; дверь — отдельный спрайт)
+    p.append(box(112, 0, 0, 142, 28, 6, M_CREAM, fridge_base_tex))
+    p.append(box(112, 0, 77, 142, 28, 80, M_CREAM))
+    p.append(box(112, 0, 6, 142, 2, 77, M_FRIDGE_IN))
+    p.append(box(112, 0, 6, 114, 28, 77, M_CREAM_IN))
+    p.append(box(140, 0, 6, 142, 28, 77, M_CREAM))
+    p.append(box(114, 2, 29, 140, 27, 31, M_SHELF_IN))
+    p.append(box(114, 2, 53, 140, 27, 55, M_SHELF_IN))
+    return p
+
+
+FRIDGE_DOOR_CLOSED = [box(112, 28, 0.5, 142, 31, 79.5, M_CREAM, fridge_door_tex)]
+FRIDGE_DOOR_OPEN = [box(109, 31, 0.5, 112, 59, 79.5, M_CREAM, fridge_door_inner_tex)]
+
+ZONES = [
+    {"id": "sill", "tag": "sill", "x0": 0, "y0": 43, "x1": 9, "y1": 93, "z": 50.5, "max_h": 30},
+    {"id": "shelf", "tag": "shelf", "x0": 25, "y0": 0, "x1": 100, "y1": 15, "z": 73, "max_h": 12},
+    {"id": "counter_r", "tag": "counter", "x0": 0, "y0": 0, "x1": 60, "y1": 30, "z": TOP_H, "max_h": 24},
+    {"id": "stove", "tag": "stove", "x0": 60, "y0": 0, "x1": 86, "y1": 30, "z": TOP_H, "max_h": 24},
+    {"id": "counter_r2", "tag": "counter", "x0": 86, "y0": 0, "x1": 108, "y1": 30, "z": TOP_H, "max_h": 24},
+    {"id": "counter_l", "tag": "counter", "x0": 0, "y0": 30, "x1": 30, "y1": 108, "z": TOP_H, "max_h": 30},
+    {"id": "fridge_top", "tag": "fridge_top", "x0": 112, "y0": 0, "x1": 142, "y1": 28, "z": 80, "max_h": 20},
+    {"id": "fridge_0", "tag": "fridge", "x0": 116, "y0": 4, "x1": 138, "y1": 26, "z": 6, "max_h": 21, "container": "fridge"},
+    {"id": "fridge_1", "tag": "fridge", "x0": 116, "y0": 4, "x1": 138, "y1": 26, "z": 31, "max_h": 20, "container": "fridge"},
+    {"id": "fridge_2", "tag": "fridge", "x0": 116, "y0": 4, "x1": 138, "y1": 26, "z": 55, "max_h": 20, "container": "fridge"},
+]
+
+
+def render_kitchen():
+    cv = Canvas(VIEW_W, VIEW_H, ORIGIN)
+    cv.add(kitchen_prims())
+    cv.finish()
+    img = cv.image()
+    # фон вокруг комнаты + мягкая тень под полом
+    a = np.array(img)
+    empty = a[..., 3] == 0
+    shadow = np.zeros_like(empty)
+    shadow[4:] = ~empty[:-4]
+    a[empty] = rgba("W")
+    a[empty & shadow] = rgba("c")
+    return Image.fromarray(a, "RGBA")
+
+
+def render_door(prims):
+    cv = Canvas(VIEW_W, VIEW_H, ORIGIN)
+    cv.add(prims)
+    cv.finish()
+    img = cv.image()
+    bb = img.getbbox()
+    x0, y0, x1, y1 = bb[0] - 1, bb[1] - 1, bb[2] + 1, bb[3] + 1
+    return img.crop((x0, y0, x1, y1)), (x0, y0)
+
+
 # ---------------------------------------------------------------- items
 
+def plates_tex(x, y, z, face, k, nz):
+    if face == FACE_TOP:
+        return "c" if math.hypot(x, y) < 2.8 else "W"
+    if (z % 1.07) < 0.3:
+        return "k"
+    return None
+
+
+def cup_top(inner_r, inner, rim=None):
+    def tex(x, y, z, face, k, nz):
+        if face == FACE_TOP and nz < 1.5:
+            return inner if math.hypot(x, y) < inner_r else rim
+        return None
+    return tex
+
+
+def bowl_tex(x, y, z, face, k, nz):
+    if nz > 1.5:
+        return "l" if math.hypot(x, y) > 3.4 else "z"
+    return None
+
+
+def board_tex(x, y, z, face, k, nz):
+    if face == FACE_TOP and math.hypot(x - 6.4, y) < 0.6:
+        return "u"
+    if face == FACE_TOP and (y % 2.5) < 0.4 and x < 4.5:
+        return "w"
+    return None
+
+
+def soap_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP and 1.5 < z < 3.6:
+        return "W" if face == FACE_LEFT else "c"
+    return None
+
+
+def milk_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP and 2.2 < z < 4.4:
+        return "l" if face == FACE_LEFT else "L"
+    return None
+
+
+def cheese_tex(x, y, z, face, k, nz):
+    for hx, hy, hz in ((1, 1.6, 1.2), (-1.4, 1.6, 1.8), (2.6, -0.4, 1), (0.2, -0.2, 2.6), (2.6, 1, 2)):
+        if (x - hx) ** 2 + (y - hy) ** 2 + (z - hz) ** 2 < 0.45:
+            return "Y" if face == FACE_TOP else "n"
+    return None
+
+
+def handle(y0, y1, z0, z1, mat, t=0.5):
+    return [
+        box(-t, y0, z1 - 0.7, t, y1, z1, mat),
+        box(-t, y0, z0, t, y1, z0 + 0.7, mat),
+        box(-t, y1 - 0.7, z0, t, y1, z1, mat),
+    ]
+
+
 ITEMS = {
-    "plates": [
-        ".oooooooooooo.",
-        "oWWWWWWWWWWWWo",
-        ".oCCCCCCCCCCo.",
-        "oWWWWWWWWWWWWo",
-        ".oCCCCCCCCCCo.",
-        "oWWWWWWWWWWWWo",
-        ".oCCCCCCCCCCo.",
-        "..oooooooooo..",
-    ],
-    "bowl": [
-        "oooooooooo",
-        "oLLLLLLLLo",
-        "olWllllllo",
-        ".ollllllo.",
-        "..oLLLLo..",
-        "...oooo...",
-    ],
-    "mug_red": [
-        "ooooooo..",
-        "oWrrrro..",
-        "orrrrrooo",
-        "orrrrro.o",
-        "orrrrro.o",
-        "orrrrrooo",
-        "oRRRRRo..",
-        "ooooooo..",
-    ],
-    "mug_blue": [
-        "ooooooo..",
-        "oWllllo..",
-        "olllllooo",
-        "olllllo.o",
-        "olllllo.o",
-        "olllllooo",
-        "oLLLLLo..",
-        "ooooooo..",
-    ],
-    "glass": [
-        "oooooo",
-        "oWtTto",
-        "otttTo",
-        "otttTo",
-        "otttTo",
-        "otttTo",
-        "oTTTTo",
-        "oooooo",
-    ],
+    "plates": [cyl(0, 0, 4.5, 0, 3.2, I_WHITE, plates_tex)],
+    "bowl": [sphere(0, 0, 4.2, 4.2, I_BLUE, bowl_tex, zmax=4.2)],
+    "mug_yellow": [cyl(0, 0, 2.5, 0, 5.5, I_OCHRE, cup_top(1.8, "u"))] + handle(2.4, 3.9, 1.5, 4.5, I_OCHRE),
+    "mug_blue": [cyl(0, 0, 2.5, 0, 5.5, I_BLUE, cup_top(1.8, "u"))] + handle(2.4, 3.9, 1.5, 4.5, I_BLUE),
+    "glass": [cyl(0, 0, 1.9, 0, 5, I_GLASS, cup_top(1.3, "t"))],
     "pot": [
-        "......oooo......",
-        ".....oxxxxo.....",
-        "..oooooooooooo..",
-        ".oSssssssssssSo.",
-        "oooooooooooooooo",
-        "ooosssssssssSooo",
-        "o.osssssssssSo.o",
-        "ooosssssssssSooo",
-        "..oSssssssssSo..",
-        "..oSSSSSSSSSSo..",
-        "...oooooooooo...",
+        cyl(0, 0, 4.5, 0, 5, I_METAL),
+        cyl(0, 0, 4.7, 5, 5.6, I_METAL),
+        cyl(0, 0, 1, 5.6, 6.6, I_DARK),
+        box(4.2, -0.8, 3.6, 6.2, 0.8, 4.6, I_DARK),
+        box(-0.8, 4.2, 3.6, 0.8, 6.2, 4.6, I_DARK),
     ],
     "pan": [
-        "oooooooooo........",
-        "oSSSSSSSSoooooooo.",
-        "oddddddddovvvvvvvo",
-        ".oddddddo.oooooooo",
-        "..oooooo..........",
+        cyl(0, 0, 4.5, 0, 1.6, I_DARK, cup_top(3.6, "d", "m")),
+        box(4, -0.7, 0.6, 11, 0.7, 1.6, I_WOOD),
     ],
     "kettle": [
-        "......oo.....",
-        ".....oxxo....",
-        "...ooooooo...",
-        "o.oWyyyyyyoo.",
-        "ooyyyyyyyyo.o",
-        ".oyyyyyyyyo.o",
-        "..oyyyyyyyo.o",
-        "..oyyyyyyyooo",
-        "..oRyyyyyRo..",
-        "..oRRRRRRRo..",
-        "..ooooooooo..",
+        cyl(0, 0, 3.6, 0, 5.5, I_TERRA),
+        cyl(0, 0, 2, 5.5, 6.3, I_TERRA),
+        sphere(0, 0, 6.8, 0.8, I_DARK),
+        box(-0.6, 3.3, 2, 0.6, 6, 3.2, I_TERRA),
+        box(-0.6, 5.2, 3.2, 0.6, 6, 4.4, I_TERRA),
+        box(-0.5, -2.6, 5.5, 0.5, -1.8, 8.3, I_DARK),
+        box(-0.5, 1.8, 5.5, 0.5, 2.6, 8.3, I_DARK),
+        box(-0.5, -2.6, 7.6, 0.5, 2.6, 8.3, I_DARK),
     ],
-    "cutting_board": [
-        "....oooooo....",
-        "...owwwwwwo...",
-        "...owwoowwo...",
-        "...owwwwwwo...",
-        ".oooooooooooo.",
-        "owwwwwwwwwwwvo",
-        "owwwwwwwwwwwvo",
-        "owwwwwwwwwwwvo",
-        "ovvvvvvvvvvvvo",
-        ".oooooooooooo.",
-    ],
+    "cutting_board": [box(-5, -3.5, 0, 5, 3.5, 1.3, I_WOOD, board_tex), box(5, -1.2, 0, 7.5, 1.2, 1.3, I_WOOD, board_tex)],
     "knife_block": [
-        ".oo.oo.oo.",
-        ".od.od.do.",
-        ".od.od.do.",
-        "oooooooooo",
-        "owwwwwwwvo",
-        "owwwwwwwvo",
-        "owwwwwwwvo",
-        "owwwwwwwvo",
-        "ovvvvvvvvo",
-        "oooooooooo",
+        box(-2, -2.6, 0, 2, 2.6, 6, I_WOOD),
+        box(-1.6, -1.6, 6, -0.6, -0.6, 8.6, I_DARK),
+        box(-0.5, -0.5, 6, 0.5, 0.5, 8.1, I_DARK),
+        box(0.6, 0.6, 6, 1.6, 1.6, 7.6, I_DARK),
     ],
     "soap": [
-        "..o..",
-        ".oxo.",
-        ".ooo.",
-        "oWeeo",
-        "oeeeo",
-        "oWWWo",
-        "oWWWo",
-        "oeeeo",
-        "oEEEo",
-        "ooooo",
+        box(-1.2, -1.2, 0, 1.2, 1.2, 5, I_GREEN, soap_tex),
+        cyl(0, 0, 0.5, 5, 6.5, I_DARK),
+        box(-0.3, 0, 6, 0.3, 1.8, 6.6, I_DARK),
     ],
     "plant": [
-        "....o.o....",
-        "...oeoeo...",
-        ".o.oeoeo.o.",
-        "oeooEoEooeo",
-        "oEeoEeEoeEo",
-        ".oEeoEoeEo.",
-        "..oEeEeEo..",
-        "...oEEEo...",
-        ".ooooooooo.",
-        ".oWrrrrrro.",
-        "..orrrrro..",
-        "..oRrrrRo..",
-        "..oRRRRRo..",
-        "...ooooo...",
+        cyl(0, 0, 2.6, 0, 3.4, I_TERRA),
+        cyl(0, 0, 3, 3.2, 4.2, I_TERRA, cup_top(2.4, "u")),
+        sphere(0.8, 1.4, 5.4, 1.3, I_GREEN),
+        sphere(-1.4, -1.1, 5.6, 1.3, I_GREEN),
+        sphere(0, 0, 6, 1.9, I_GREEN),
+        sphere(1.2, -0.8, 7.6, 1.4, I_GREEN),
+        sphere(-1, 1, 7.2, 1.4, I_GREEN),
+        sphere(0.2, 0.2, 8.8, 1.1, I_GREEN),
     ],
     "milk": [
-        "..ooo..",
-        ".oWWWo.",
-        "oWWWWWo",
-        "ooooooo",
-        "oWWWWSo",
-        "olllllo",
-        "olWWllo",
-        "olllllo",
-        "oWWWWSo",
-        "oWWWWSo",
-        "oSSSSSo",
-        "ooooooo",
+        box(-1.6, -1.6, 0, 1.6, 1.6, 6.5, I_WHITE, milk_tex),
+        box(-1.6, -0.5, 6.5, 1.6, 0.5, 7.6, I_WHITE),
+        cyl(0.7, 1.0, 0.5, 6.4, 7.2, I_BLUE),
     ],
-    "cheese": [
-        ".....ooo.",
-        "...ooyyyo",
-        ".ooyyyyyo",
-        "oyyyyoyyo",
-        "oyoyyyyRo",
-        "ooooooooo",
-    ],
+    "cheese": [box(-2.6, -1.6, 0, 2.6, 1.6, 2.6, I_OCHRE, cheese_tex)],
     "spices": [
-        "oooo.oooo",
-        "oxxo.oxxo",
-        "oooo.oooo",
-        "oyWo.orWo",
-        "oyyo.orro",
-        "oyyo.orro",
-        "oooo.oooo",
+        cyl(0, -1.2, 1, 0, 3.2, I_OCHRE),
+        cyl(0, -1.2, 1.05, 3.2, 3.9, I_DARK),
+        cyl(0, 1.2, 1, 0, 3.2, I_TERRA),
+        cyl(0, 1.2, 1.05, 3.2, 3.9, I_DARK),
     ],
 }
 
 
-# ---------------------------------------------------------------- boxes
-
-def box_closed():
-    w, h = 36, 26
-    c = Canvas(w, h)
-    c.rect(0, 0, w - 1, h - 1, "o")
-    # верхняя грань
-    c.rect(1, 1, w - 2, 5, "b")
-    c.hline(1, w - 2, 5, "B")
-    c.vline(w // 2 - 1, 1, 4, "n")  # шов между створками
-    # передняя грань
-    c.rect(1, 6, w - 2, h - 2, "b")
-    c.vline(w - 2, 6, h - 2, "B")
-    c.hline(1, w - 2, h - 2, "B")
-    # скотч
-    c.rect(w // 2 - 3, 1, w // 2 + 2, 9, "C")
-    c.hline(w // 2 - 3, w // 2 + 2, 5, "k")
-    c.vline(w // 2 - 1, 1, 4, "k")
-    # надпись маркером
-    for x in range(5, 13):
-        c.px(x, 14 + (x % 2), "n")
-    for x in range(6, 11):
-        c.px(x, 18, "n")
-    # подпись "стекло" — кружок-стрелка
-    c.rect(26, 15, 29, 15, "n")
-    c.rect(27, 14, 28, 14, "n")
-    c.rect(27, 16, 28, 19, "n")
-    return pad(c.img)
+ITEM_SCALE = 1.5
 
 
-def box_open():
-    w, h = 36, 32  # +6 сверху на раскрытые створки
-    c = Canvas(w, h)
-    top = 6
-    # передняя грань (как у закрытой)
-    c.rect(0, top + 5, w - 1, h - 1, "o")
-    c.rect(1, top + 6, w - 2, h - 2, "b")
-    c.vline(w - 2, top + 6, h - 2, "B")
-    c.hline(1, w - 2, h - 2, "B")
-    # проём
-    c.rect(0, top, w - 1, top + 5, "o")
-    c.rect(2, top + 1, w - 3, top + 4, "n")
-    c.hline(2, w - 3, top + 1, "u")
-    # створки
-    for i in range(6):
-        # левая
-        c.hline(0 + i // 2, 9 + i // 2, top - 6 + i, "o" if i == 0 else ("b" if i < 5 else "B"))
-        c.px(0 + i // 2, top - 6 + i, "o")
-        c.px(9 + i // 2, top - 6 + i, "o")
-        # правая
-        c.hline(w - 10 - i // 2, w - 1 - i // 2, top - 6 + i, "o" if i == 0 else ("b" if i < 5 else "B"))
-        c.px(w - 10 - i // 2, top - 6 + i, "o")
-        c.px(w - 1 - i // 2, top - 6 + i, "o")
-    # край скотча на передней грани
-    c.rect(w // 2 - 3, top + 6, w // 2 + 2, top + 9, "C")
-    for x in range(5, 13):
-        c.px(x, 14 + top - 0 + (x % 2), "n")
-    for x in range(6, 11):
-        c.px(x, 18 + top, "n")
-    c.rect(26, 15 + top, 29, 15 + top, "n")
-    c.rect(27, 14 + top, 28, 14 + top, "n")
-    c.rect(27, 16 + top, 28, 19 + top, "n")
-    return pad(c.img)
-
-
-def pad(img, p=1):
-    out = Image.new("RGBA", (img.width + 2 * p, img.height + 2 * p), (0, 0, 0, 0))
-    out.paste(img, (p, p))
+def scaled(prims, k):
+    """Масштабирует модель предмета (текстуры остаются в исходных единицах)."""
+    from iso import Prim
+    out = []
+    for pr in prims:
+        q = {key: (v * k if isinstance(v, (int, float)) and v is not None else v) for key, v in pr.p.items()}
+        tex = pr.tex
+        if tex is not None:
+            tex = (lambda t: lambda x, y, z, f, key, nz: t(x / k, y / k, z / k, f, key, nz))(tex)
+        out.append(Prim(pr.kind, pr.mat, tex, **q))
     return out
 
 
-# ---------------------------------------------------------------- kitchen
-
-def kitchen_bg():
-    W, H = 320, 180
-    c = Canvas(W, H, "c")
-
-    # --- обои: мелкий ромбик
-    for y in range(4, 128, 8):
-        for x in range(4 + (y // 8 % 2) * 6, W, 12):
-            c.px(x, y, "C")
-    c.rect(0, 0, W - 1, 1, "C")
-
-    # --- пол
-    FLOOR = 132
-    c.rect(0, FLOOR, W - 1, H - 1, "w")
-    for i, y in enumerate(range(FLOOR, H, 8)):
-        c.hline(0, W - 1, y, "v")
-        off = (i * 23) % 40
-        for x in range(off, W, 40):
-            c.vline(x, y + 1, min(y + 7, H - 1), "v")
-        # блик доски
-        for x in range(off + 3, W, 40):
-            c.hline(x, x + 6, y + 2, "b")
-    c.hline(0, W - 1, FLOOR, "u")
-    c.hline(0, W - 1, FLOOR + 1, "v")
-
-    # --- плинтус
-    c.rect(0, 126, W - 1, 131, "C")
-    c.hline(0, W - 1, 126, "W")
-    c.hline(0, W - 1, 131, "k")
-
-    # --- фартук (плитка)
-    c.rect(14, 66, 216, 91, "t")
-    for y in range(66, 92, 6):
-        c.hline(14, 216, y, "T")
-    for row, y in enumerate(range(66, 92, 6)):
-        for x in range(14 + (row % 2) * 6, 217, 12):
-            c.vline(x, y, min(y + 5, 91), "T")
-
-    # --- окно
-    c.rect(28, 16, 76, 60, "o")
-    c.rect(29, 17, 75, 59, "W")
-    c.rect(31, 19, 73, 57, "l")
-    # небо светлее сверху
-    c.rect(31, 19, 73, 30, "t")
-    for x in range(31, 74, 2):
-        c.px(x, 31, "t")
-    # дерево за окном
-    for (cx, cy, r) in [(40, 50, 9), (52, 54, 7), (66, 52, 8)]:
-        for y in range(cy - r, 58):
-            for x in range(cx - r, cx + r + 1):
-                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r and 31 <= x <= 73 and 19 <= y <= 57:
-                    c.px(x, y, "e" if (x + y) % 5 else "E")
-    # блики стекла
-    for i in range(6):
-        c.px(34 + i, 28 - i, "W")
-        c.px(36 + i, 28 - i, "W")
-    # переплёт
-    c.rect(51, 17, 53, 59, "W")
-    c.rect(29, 37, 75, 38, "W")
-    c.vline(51, 19, 57, "C")
-    c.hline(31, 73, 38, "C")
-    # подоконник
-    c.rect(24, 61, 80, 65, "o")
-    c.rect(25, 61, 79, 64, "C")
-    c.hline(25, 79, 61, "W")
-    c.hline(25, 79, 64, "k")
-    c.hline(26, 78, 66, "C")  # тень
-
-    # --- верхний шкаф (открытые полки)
-    c.rect(94, 11, 178, 14, "o")
-    c.rect(95, 12, 177, 13, "G")
-    c.hline(95, 177, 12, "g")
-    c.rect(96, 14, 176, 62, "o")
-    c.rect(97, 15, 175, 61, "g")
-    c.rect(99, 17, 173, 58, "k")
-    c.rect(99, 17, 173, 18, "C")  # тень сверху внутри
-    c.vline(99, 17, 58, "C")
-    # средняя полка: верх доски = 37
-    c.rect(99, 37, 173, 39, "G")
-    c.hline(99, 173, 37, "g")
-    c.hline(99, 173, 39, "h")
-    c.hline(99, 173, 40, "C")  # тень под полкой
-    # нижняя доска: верх = 59
-    c.rect(97, 59, 175, 61, "g")
-    c.hline(97, 175, 59, "g")
-    c.hline(97, 175, 61, "G")
-    c.vline(175, 15, 61, "G")
-    c.hline(97, 175, 62, "o")
-    c.hline(96, 176, 63, "C")  # тень на стене
-
-    # --- настенная полка
-    c.rect(177, 49, 215, 52, "o")
-    c.rect(178, 50, 214, 51, "w")
-    c.hline(178, 214, 50, "b")
-    c.hline(178, 214, 51, "v")
-    for bx in (183, 209):
-        c.rect(bx, 53, bx + 1, 57, "o")
-        c.px(bx + 2, 53, "o")
-        c.px(bx + 2, 54, "o")
-    c.hline(178, 214, 53, "C")
-
-    # --- нижние шкафы
-    c.rect(14, 97, 216, 131, "o")
-    c.rect(15, 98, 215, 126, "g")
-    c.rect(15, 127, 215, 131, "d")  # цоколь
-    # ящики сверху (левая и правая секции)
-    def section(x0, x1, doors):
-        c.hline(x0, x1, 104, "h")
-        c.hline(x0, x1, 98, "g")
-        n = doors
-        step = (x1 - x0 + 1) / n
-        for i in range(n):
-            dx0 = int(x0 + i * step)
-            dx1 = int(x0 + (i + 1) * step) - 1
-            c.vline(dx1, 98, 126, "h")
-            c.vline(dx0, 98, 126, "g")
-            # ручка ящика
-            mid = (dx0 + dx1) // 2
-            c.rect(mid - 2, 101, mid + 2, 101, "S")
-            # дверца: рамка-филёнка
-            c.frame(dx0 + 3, 107, dx1 - 3, 123, "G")
-            c.hline(dx0 + 3, dx1 - 3, 107, "h")
-            # ручка дверцы
-            hx = dx1 - 5 if i % 2 == 0 else dx0 + 5
-            c.rect(hx, 110, hx, 113, "S")
-    section(15, 119, 4)
-    section(161, 215, 2)
-    # плита
-    c.rect(120, 97, 160, 126, "o")
-    c.rect(121, 98, 159, 126, "s")
-    c.hline(121, 159, 98, "W")
-    for kx in range(125, 158, 7):
-        c.rect(kx, 100, kx + 1, 101, "x")
-    c.rect(124, 105, 156, 123, "x")
-    c.rect(126, 108, 154, 121, "d")
-    c.hline(126, 154, 108, "m")
-    c.rect(130, 106, 150, 106, "S")  # ручка духовки
-    c.vline(159, 98, 126, "S")
-
-    # столешница: верх = 92
-    c.rect(13, 92, 217, 96, "o")
-    c.rect(14, 92, 216, 95, "w")
-    c.hline(14, 216, 92, "b")
-    c.hline(14, 216, 95, "v")
-    # варочная поверхность
-    c.rect(120, 92, 160, 95, "S")
-    c.hline(120, 160, 92, "s")
-    for gx0 in (124, 142):
-        c.rect(gx0, 90, gx0 + 14, 91, "o")
-        c.rect(gx0 + 1, 90, gx0 + 13, 90, "x")
-    # мойка: бортик и кран
-    c.hline(34, 70, 92, "s")
-    c.hline(34, 70, 93, "S")
-    c.rect(49, 80, 51, 91, "o")
-    c.vline(50, 81, 91, "s")
-    c.rect(49, 78, 58, 80, "o")
-    c.hline(50, 57, 79, "s")
-    c.rect(57, 80, 59, 83, "o")
-    c.vline(58, 80, 82, "S")
-    c.rect(46, 89, 54, 91, "o")
-    c.rect(47, 90, 53, 90, "S")
-
-    # --- холодильник (корпус и внутренности; дверь — отдельный спрайт)
-    c.rect(226, 28, 266, 131, "o")
-    c.rect(227, 29, 265, 130, "W")
-    c.vline(265, 29, 130, "C")
-    c.rect(229, 31, 263, 127, "t")
-    c.rect(229, 31, 263, 32, "T")
-    c.vline(263, 31, 127, "T")
-    for sy in (62, 96):
-        c.rect(229, sy, 263, sy + 1, "S")
-        c.hline(229, 263, sy, "s")
-    c.rect(229, 125, 263, 127, "T")
-    c.hline(229, 263, 125, "s")
-    c.rect(227, 128, 265, 130, "C")
-    # лампочка
-    c.rect(244, 33, 247, 34, "W")
-    # тень от холодильника на стене
-    c.vline(267, 30, 125, "C")
-    c.vline(268, 32, 125, "C")
-
-    # --- часы
-    cx, cy, r = 298, 40, 7
-    for y in range(cy - r - 1, cy + r + 2):
-        for x in range(cx - r - 1, cx + r + 2):
-            d = (x - cx) ** 2 + (y - cy) ** 2
-            if d <= (r + 1) ** 2:
-                c.px(x, y, "o")
-            if d <= r * r:
-                c.px(x, y, "W")
-    c.vline(cx, cy - 5, cy, "o")
-    c.hline(cx, cx + 3, cy, "o")
-    for (dx, dy) in [(0, -6), (6, 0), (0, 6), (-6, 0)]:
-        c.px(cx + dx, cy + dy, "m")
-    c.hline(cx - 6, cx + 6, cy + r + 2, "C")
-
-    # --- полотенце на крючке справа от плиты? — нет: акцент только на предметах.
-    return c.img
+def footprint(prims):
+    xs0, ys0, xs1, ys1, zs1 = [], [], [], [], []
+    for pr in prims:
+        x0, y0, z0, x1, y1, z1 = pr.bounds()
+        if pr.p.get("zmax") is not None:
+            z1 = min(z1, pr.p["zmax"])
+        xs0.append(x0); ys0.append(y0); xs1.append(x1); ys1.append(y1); zs1.append(z1)
+    return min(xs0), min(ys0), max(xs1), max(ys1), max(zs1)
 
 
-def fridge_door_closed():
-    w, h = 41, 104  # x 226..266, y 28..131
-    c = Canvas(w, h)
-    c.rect(0, 0, w - 1, h - 1, "o")
-    c.rect(1, 1, w - 2, h - 2, "W")
-    c.vline(w - 2, 1, h - 2, "C")
-    c.hline(1, w - 2, h - 2, "C")
-    # морозилка / основная камера
-    c.hline(1, w - 2, 30, "m")
-    c.hline(1, w - 2, 31, "C")
-    # ручки
-    c.rect(3, 10, 5, 24, "o")
-    c.vline(4, 11, 23, "s")
-    c.rect(3, 36, 5, 64, "o")
-    c.vline(4, 37, 63, "s")
-    # блик
-    c.vline(1, 2, 28, "W")
-    # магнитики? — нет, только мебель
-    c.rect(1, h - 5, w - 2, h - 2, "C")
-    c.hline(1, w - 2, h - 5, "k")
-    return pad(c.img)
+# ---------------------------------------------------------------- cardboard box
+
+BOX_X, BOX_Y, BOX_H = 11, 9, 15
 
 
-def fridge_door_open():
-    w, h = 12, 104  # x 267..278
-    c = Canvas(w, h)
-    c.rect(0, 0, w - 1, h - 1, "o")
-    c.rect(1, 1, w - 2, h - 2, "C")
-    c.vline(1, 1, h - 2, "W")
-    c.vline(w - 2, 1, h - 2, "k")
-    for by in (20, 44, 70, 92):
-        c.rect(1, by, w - 2, by + 3, "T")
-        c.hline(1, w - 2, by, "s")
-    c.hline(1, w - 2, 30, "m")
-    return pad(c.img)
+def box_side_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT and y > BOX_Y - 0.5:
+        if -8 <= x <= -1 and 6 <= z <= 10.5 and (z % 1.8) < 0.6:
+            return "N"
+        if 4.5 <= x <= 5.5 and 5 <= z <= 10:
+            return "N"
+        if 3 <= x <= 7 and 10 - abs(x - 5) * 0.8 <= z <= 10.6 - abs(x - 5) * 0.8 + 0.6:
+            return "N"
+    return None
 
 
-# ---------------------------------------------------------------- cursors
-
-CURSORS = {
-    "cursor_arrow": [
-        "o......",
-        "oo.....",
-        "oWo....",
-        "oWWo...",
-        "oWWWo..",
-        "oWWWWo.",
-        "oWWWWWo",
-        "oWWoooo",
-        "ooo....",
-    ],
-    "cursor_hand": [
-        "...oo....",
-        "..oWWo...",
-        "..oWWoo..",
-        "..oWWWWoo",
-        "ooWWWWWWo",
-        "oWoWWWWWo",
-        ".oWWWWWWo",
-        "..oWWWWo.",
-        "...oWWWo.",
-        "...ooooo.",
-    ],
-    "cursor_grab": [
-        "..oooooo.",
-        ".oWWWWWWo",
-        "ooWWWWWWo",
-        "oWWWWWWWo",
-        ".oWWWWWWo",
-        "..oWWWWo.",
-        "...ooooo.",
-    ],
-}
+def box_closed_tex(x, y, z, face, k, nz):
+    if abs(y) < 1.6 and (face == FACE_TOP or (face == FACE_RIGHT and z > 11)):
+        return "C" if face == FACE_TOP else "k"
+    return box_side_tex(x, y, z, face, k, nz)
 
 
-# ---------------------------------------------------------------- font 5x7
+BOX_CLOSED = [box(-BOX_X, -BOX_Y, 0, BOX_X, BOX_Y, BOX_H, I_CARD, box_closed_tex)]
+BOX_OPEN = [
+    box(-BOX_X, -BOX_Y, 0, BOX_X, -BOX_Y + 1, BOX_H, I_CARD_BACK),
+    box(-BOX_X, -BOX_Y + 1, 0, -BOX_X + 1, BOX_Y, BOX_H, I_CARD_SIDE),
+    box(-BOX_X + 1, BOX_Y - 1, 0, BOX_X, BOX_Y, BOX_H, I_CARD, box_side_tex),
+    box(BOX_X - 1, -BOX_Y + 1, 0, BOX_X, BOX_Y - 1, BOX_H, I_CARD),
+    box(-BOX_X + 1, -BOX_Y + 1, 0, BOX_X - 1, BOX_Y - 1, 1, I_CARD_FLOOR),
+    # створки
+    box(-BOX_X, -BOX_Y - 1.4, BOX_H, BOX_X, -BOX_Y, BOX_H + 7, I_CARD),
+    box(-BOX_X - 1.4, -BOX_Y, BOX_H, -BOX_X, BOX_Y, BOX_H + 7, I_CARD),
+    box(-BOX_X, BOX_Y, BOX_H - 0.8, BOX_X, BOX_Y + 6, BOX_H, I_CARD),
+    box(BOX_X, -BOX_Y, BOX_H - 0.8, BOX_X + 6, BOX_Y, BOX_H, I_CARD),
+]
 
-GLYPHS = {
-    "А": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
-    "Б": ["#####", "#....", "#....", "####.", "#...#", "#...#", "####."],
-    "В": ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
-    "Г": ["#####", "#....", "#....", "#....", "#....", "#....", "#...."],
-    "Д": [".###.", ".#.#.", ".#.#.", ".#.#.", ".#.#.", "#####", "#...#"],
-    "Е": ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
-    "Ж": ["#.#.#", "#.#.#", ".###.", "..#..", ".###.", "#.#.#", "#.#.#"],
-    "З": [".###.", "#...#", "....#", "..##.", "....#", "#...#", ".###."],
-    "И": ["#...#", "#...#", "#..##", "#.#.#", "##..#", "#...#", "#...#"],
-    "Й": ["..#..", "#...#", "#..##", "#.#.#", "##..#", "#...#", "#...#"],
-    "К": ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
-    "Л": ["..###", ".#..#", ".#..#", ".#..#", ".#..#", "#...#", "#...#"],
-    "М": ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
-    "Н": ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
-    "О": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
-    "П": ["#####", "#...#", "#...#", "#...#", "#...#", "#...#", "#...#"],
-    "Р": ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
-    "С": [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
-    "Т": ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
-    "У": ["#...#", "#...#", "#...#", ".####", "....#", "#...#", ".###."],
-    "Ф": ["..#..", ".###.", "#.#.#", "#.#.#", ".###.", "..#..", "..#.."],
-    "Х": ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
-    "Ц": ["#..#.", "#..#.", "#..#.", "#..#.", "#..#.", "#####", "....#"],
-    "Ч": ["#...#", "#...#", "#...#", ".####", "....#", "....#", "....#"],
-    "Ш": ["#.#.#", "#.#.#", "#.#.#", "#.#.#", "#.#.#", "#.#.#", "#####"],
-    "Щ": ["#.#.#", "#.#.#", "#.#.#", "#.#.#", "#.#.#", "#####", "....#"],
-    "Ъ": ["##...", ".#...", ".#...", ".###.", ".#..#", ".#..#", ".###."],
-    "Ы": ["#...#", "#...#", "#...#", "##..#", "#.#.#", "#.#.#", "##..#"],
-    "Ь": ["#....", "#....", "#....", "####.", "#...#", "#...#", "####."],
-    "Э": [".###.", "#...#", "....#", "..###", "....#", "#...#", ".###."],
-    "Ю": ["#..#.", "#.#.#", "#.#.#", "###.#", "#.#.#", "#.#.#", "#..#."],
-    "Я": [".####", "#...#", "#...#", ".####", "..#.#", ".#..#", "#...#"],
-    "0": [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
-    "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
-    "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
-    "3": ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
-    "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
-    "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
-    "6": [".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."],
-    "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
-    "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
-    "9": [".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."],
-    "!": ["#", "#", "#", "#", "#", ".", "#"],
-    ".": [".", ".", ".", ".", ".", ".", "#"],
-    ",": ["..", "..", "..", "..", "..", ".#", "#."],
-    "?": [".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."],
-    "-": ["...", "...", "...", "###", "...", "...", "..."],
-    ":": [".", ".", "#", ".", ".", "#", "."],
-    " ": ["...", "...", "...", "...", "...", "...", "..."],
-}
-GLYPHS["Ё"] = GLYPHS["Е"]
-# латиница: свои глифы для R S F I, остальное — как у похожих кириллических
-GLYPHS["R"] = ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"]
-GLYPHS["S"] = [".####", "#....", "#....", ".###.", "....#", "....#", "####."]
-GLYPHS["F"] = GLYPHS["Г"][:3] + ["####."] + GLYPHS["Г"][4:]
-GLYPHS["I"] = ["###", ".#.", ".#.", ".#.", ".#.", ".#.", "###"]
-for lat, cyr in zip("ABCEHKMOPTXY", "АВСЕНКМОРТХУ"):
-    GLYPHS[lat] = GLYPHS[cyr]
 
+# ---------------------------------------------------------------- font
 
 def font():
     chars = list(GLYPHS.keys())
@@ -690,24 +569,92 @@ def font():
 
 # ---------------------------------------------------------------- main
 
+def v2(p):
+    return f"Vector2({p[0]}, {p[1]})"
+
+
+def num(v):
+    return f"{float(v):.2f}".rstrip("0").rstrip(".") if v != int(v) else str(int(v))
+
+
 def main():
-    for name, rows in ITEMS.items():
-        widths = {len(r) for r in rows}
-        if len(widths) != 1:
-            sys.exit(f"{name}: строки разной длины {widths}")
-        save("item_" + name, from_map(rows))
+    for old in os.listdir(SPRITES) if os.path.isdir(SPRITES) else []:
+        if old.endswith(".png") or old.endswith(".png.import"):
+            os.remove(os.path.join(SPRITES, old))
+
+    out = [
+        "# Сгенерировано tools/gen_art.py — не редактировать вручную.",
+        "# Мировые координаты: x — вдоль правой стены, y — вдоль левой, z — вверх.",
+        "# Экран = ORIGIN + (x - y, (x + y) / 2 - z).",
+        "extends RefCounted",
+        "",
+        f"const ORIGIN := {v2(ORIGIN)}",
+        f"const ROOM := Vector3({RW}, {RD}, {RH})",
+        "",
+        "const ITEMS := {",
+    ]
+    for name, prims in ITEMS.items():
+        prims = scaled(prims, ITEM_SCALE)
+        img, anchor = render_sprite(prims)
+        save("item_" + name, img)
+        x0, y0, x1, y1, h = footprint(prims)
+        # след чуть меньше габарита: ручки и края могут нависать
+        sh = 1.5
+        x0, y0 = min(x0 + sh, -1.5), min(y0 + sh, -1.5)
+        x1, y1 = max(x1 - sh, 1.5), max(y1 - sh, 1.5)
+        out.append(
+            f'\t"{name}": {{"anchor": {v2(anchor)}, '
+            f'"foot": Rect2({num(x0)}, {num(y0)}, {num(x1 - x0)}, {num(y1 - y0)}), "h": {num(h)}}},'
+        )
+    out.append("}")
+
+    img, a_closed = render_sprite(BOX_CLOSED, outline="N")
+    save("box_closed", img)
+    img, a_open = render_sprite(BOX_OPEN, outline="N")
+    save("box_open", img)
+    out += [
+        "",
+        "const BOX := {",
+        f'\t"anchor_closed": {v2(a_closed)},',
+        f'\t"anchor_open": {v2(a_open)},',
+        f'\t"foot": Rect2({-BOX_X}, {-BOX_Y}, {2 * BOX_X}, {2 * BOX_Y}),',
+        f'\t"h": {BOX_H},',
+        "}",
+    ]
+
+    save("kitchen_bg", render_kitchen())
+    img, pos_c = render_door(FRIDGE_DOOR_CLOSED)
+    save("fridge_closed", img)
+    img, pos_o = render_door(FRIDGE_DOOR_OPEN)
+    save("fridge_open", img)
+    out += [
+        "",
+        "# двери: левый верхний угол спрайта на экране; depth — для сортировки",
+        "const DOORS := {",
+        f'\t"fridge": {{"closed_pos": {v2(pos_c)}, "open_pos": {v2(pos_o)}, "closed_depth": {142 + 31}, "open_depth": {112 + 59}}},',
+        "}",
+        "",
+        "# поверхности: прямоугольник x0..x1, y0..y1 на высоте z",
+        "const ZONES := [",
+    ]
+    for z in ZONES:
+        fields = ", ".join(
+            f'"{k}": "{v}"' if isinstance(v, str) else f'"{k}": {num(v)}' for k, v in z.items()
+        )
+        out.append(f"\t{{{fields}}},")
+    out.append("]")
+    with open(os.path.join(SCRIPTS, "art_data.gd"), "w", encoding="utf-8") as f:
+        f.write("\n".join(out) + "\n")
+
     for name, rows in CURSORS.items():
-        save(name, from_map(rows, pad=0))
-    save("box_closed", box_closed())
-    save("box_open", box_open())
-    save("kitchen_bg", kitchen_bg())
-    save("fridge_closed", fridge_door_closed())
-    save("fridge_open", fridge_door_open())
+        save(name, from_map(rows))
     font()
-    # иконка приложения: закрытая коробка ×4
-    icon = box_closed().resize((38 * 4, 28 * 4), Image.NEAREST)
-    canvas = Image.new("RGBA", (152, 152), (0, 0, 0, 0))
-    canvas.alpha_composite(icon, (0, 20))
+
+    icon = Image.open(os.path.join(SPRITES, "box_closed.png"))
+    s = 128 // max(icon.size)
+    icon = icon.resize((icon.width * s, icon.height * s), Image.NEAREST)
+    canvas = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    canvas.alpha_composite(icon, ((128 - icon.width) // 2, (128 - icon.height) // 2))
     canvas.save(os.path.join(ROOT, "game", "icon.png"))
     print("ok")
 

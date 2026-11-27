@@ -1,5 +1,5 @@
-# Базовый спрайт с точкой опоры внизу по центру и попиксельным попаданием мыши.
-# Все PNG сгенерированы с прозрачной рамкой 1px (для обводки), её учитываем.
+# Базовый спрайт: точка опоры (anchor) задаётся генератором арта,
+# попадание мыши — попиксельное, обводка — шейдером.
 class_name PixelSprite
 extends Sprite2D
 
@@ -8,10 +8,7 @@ const COLOR_HOVER := Color("fbf5e9")
 const COLOR_WRONG := Color("c8664f")
 
 var _image: Image
-var art_w := 0   # ширина рисунка без рамки
-var art_h := 0
-var half_left := 0
-var half_right := 0
+var _tween: Tween
 
 
 func _init() -> void:
@@ -20,19 +17,15 @@ func _init() -> void:
 	material.shader = OUTLINE_SHADER
 
 
-func set_tex(tex: Texture2D) -> void:
+# anchor — пиксель спрайта, который совпадает с position
+func set_tex(tex: Texture2D, anchor: Vector2) -> void:
 	texture = tex
 	_image = tex.get_image()
-	art_w = tex.get_width() - 2
-	art_h = tex.get_height() - 2
-	half_left = art_w / 2
-	half_right = art_w - half_left
-	# position = низ-центр рисунка; нижний ряд рисунка на строке position.y - 1
-	offset = Vector2(-1 - half_left, 1 - tex.get_height())
+	offset = -anchor
 
 
 func hit(global_point: Vector2) -> bool:
-	if not visible or _image == null:
+	if not visible or _image == null or scale.x == 0.0 or scale.y == 0.0:
 		return false
 	var local := (global_point - global_position) / scale - offset
 	var px := int(floor(local.x))
@@ -46,9 +39,6 @@ func set_outline(on: bool, color: Color = COLOR_HOVER) -> void:
 	var m := material as ShaderMaterial
 	m.set_shader_parameter("enabled", on)
 	m.set_shader_parameter("outline_color", color)
-
-
-var _tween: Tween
 
 
 func new_tween() -> Tween:
