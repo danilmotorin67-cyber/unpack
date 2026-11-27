@@ -6,6 +6,7 @@ enum State { IN_BOX, LOOSE, DRAGGED, PLACED }
 
 var id := ""
 var allowed: Array = []
+var snd := "wood"             # материал для звука
 var foot := Rect2()               # след на поверхности относительно wpos (мировые единицы)
 var height := 0.0
 var state := State.IN_BOX

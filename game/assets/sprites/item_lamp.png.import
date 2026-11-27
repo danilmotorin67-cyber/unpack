@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://nou51cq71ogo"
-path="res://.godot/imported/fridge_closed.png-e74b9e1218cdfbeeaed754ea4846227e.ctex"
+uid="uid://7b5fev0ogi4d"
+path="res://.godot/imported/item_lamp.png-c5955d223d2573cef085bca94d7d9823.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/fridge_closed.png"
-dest_files=["res://.godot/imported/fridge_closed.png-e74b9e1218cdfbeeaed754ea4846227e.ctex"]
+source_file="res://assets/sprites/item_lamp.png"
+dest_files=["res://.godot/imported/item_lamp.png-c5955d223d2573cef085bca94d7d9823.ctex"]
 
 [params]
 

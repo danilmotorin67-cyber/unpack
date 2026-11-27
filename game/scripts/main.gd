@@ -2,7 +2,11 @@
 # раскладывает предметы по поверхностям и проверяет, всё ли на месте.
 extends Node2D
 
-const Level := preload("res://scripts/levels/level_01.gd")
+const LEVELS := [
+	preload("res://scripts/levels/level_01.gd"),
+	preload("res://scripts/levels/level_02.gd"),
+	preload("res://scripts/levels/level_03.gd"),
+]
 const Art := preload("res://scripts/art_data.gd")
 const CURSOR_ARROW := preload("res://assets/sprites/cursor_arrow.png")
 const CURSOR_HAND := preload("res://assets/sprites/cursor_hand.png")
@@ -22,8 +26,9 @@ const SNAP_TOLERANCE := 3.0  # насколько можно промахнут�
 const MAX_NUDGE := 12        # насколько можно сдвинуть вещь, чтобы не перекрыть соседей
 const GAP := 0.5             # минимальный зазор между вещами
 
-var data: Dictionary = Level.DATA
-var zones: Array = Art.ZONES
+var level_index := 0
+var data: Dictionary
+var zones: Array
 var containers := {}        # id -> {data, sprite, open}
 var items: Array[Item] = []
 var boxes: Array[Box] = []
@@ -32,6 +37,7 @@ var dragging: Item = null
 var drag_offset := Vector2.ZERO
 var hovered: Node = null
 var level_done := false
+var waiting_next := false
 var showing_wrong := false
 var first_item_taken := false
 var first_item_placed := false
@@ -39,6 +45,8 @@ var first_item_placed := false
 var cursor: Sprite2D
 var hint: PixelText
 var banner: Node2D
+var world: Node2D           # всё, что относится к текущему уровню
+var sfx: Sfx
 var _nudges: Array[Vector2] = []
 
 
@@ -46,25 +54,53 @@ func _ready() -> void:
 	randomize()
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	_prepare_nudges()
-	_build_level()
+	sfx = Sfx.new()
+	add_child(sfx)
 	_build_ui()
+	load_level(0)
+
+
+# Сбрасывает состояние и строит уровень с номером index (с нуля).
+func load_level(index: int) -> void:
+	level_index = index
+	data = LEVELS[index].DATA
+	zones = Art.ROOMS[data["room"]]["zones"]
+	if world:
+		world.queue_free()
+	if banner and is_instance_valid(banner):
+		banner.queue_free()
+	world = Node2D.new()
+	add_child(world)
+	containers.clear()
+	items.clear()
+	boxes.clear()
+	dragging = null
+	hovered = null
+	level_done = false
+	waiting_next = false
+	showing_wrong = false
+	first_item_taken = false
+	first_item_placed = false
+	hint.text = ""
+	_build_level()
 	_show_title()
 
 
 # ------------------------------------------------------------------ сборка
 
 func _build_level() -> void:
+	var room: Dictionary = Art.ROOMS[data["room"]]
 	var bg := Sprite2D.new()
-	bg.texture = load(data["background"])
+	bg.texture = load(room["bg"])
 	bg.centered = false
 	bg.z_index = Z_BG
-	add_child(bg)
+	world.add_child(bg)
 
-	for c in data["containers"]:
+	for id in room["doors"]:
 		var s := PixelSprite.new()
-		add_child(s)
-		containers[c["id"]] = {"data": c, "sprite": s, "open": false, "art": Art.DOORS[c["id"]]}
-		_apply_container(c["id"])
+		world.add_child(s)
+		containers[id] = {"sprite": s, "open": false, "art": room["doors"][id]}
+		_apply_container(id)
 
 	var item_defs: Dictionary = data["items"]
 	for b in data["boxes"]:
@@ -72,7 +108,7 @@ func _build_level() -> void:
 		box.wpos = Vector3(b["x"], b["y"], 0)
 		box.position = Iso.to_screen(box.wpos)
 		box.z_index = Z_WORLD + Iso.depth(box.wpos)
-		add_child(box)
+		world.add_child(box)
 		var ids: Array = b["items"].duplicate()
 		ids.shuffle()
 		box.contents = ids
@@ -82,11 +118,12 @@ func _build_level() -> void:
 			var it := Item.new()
 			it.id = id
 			it.allowed = item_defs[id]["allowed"]
+			it.snd = item_defs[id].get("snd", "wood")
 			it.foot = info["foot"]
 			it.height = info["h"]
 			it.set_tex(load("res://assets/sprites/item_%s.png" % id), info["anchor"])
 			it.visible = false
-			add_child(it)
+			world.add_child(it)
 			items.append(it)
 
 
@@ -108,7 +145,7 @@ func _build_ui() -> void:
 func _make_banner(title: String, subtitle: String) -> Node2D:
 	var root := Node2D.new()
 	root.z_index = Z_UI
-	var top := 116.0
+	var top := 112.0
 	var h := 38.0 if subtitle != "" else 30.0
 	var band := ColorRect.new()
 	band.color = Color("2e2430")
@@ -141,11 +178,12 @@ func _make_banner(title: String, subtitle: String) -> Node2D:
 
 
 func _show_title() -> void:
-	banner = _make_banner(data["title"], "")
+	banner = _make_banner(data["title"], "КОМНАТА %d ИЗ %d" % [level_index + 1, LEVELS.size()])
+	var b := banner
 	var t := create_tween()
 	t.tween_interval(1.6)
-	t.tween_property(banner, "modulate:a", 0.0, 0.5)
-	t.tween_callback(banner.queue_free)
+	t.tween_property(b, "modulate:a", 0.0, 0.5)
+	t.tween_callback(b.queue_free)
 	t.tween_callback(_show_first_hint)
 
 
@@ -164,9 +202,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F11:
 				var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+			KEY_M:
+				sfx.toggle_music()
 			KEY_R:
 				if level_done:
-					get_tree().reload_current_scene()
+					load_level(level_index)
+			KEY_SPACE, KEY_ENTER:
+				if waiting_next:
+					_next_level()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var mp := get_global_mouse_position().floor()
 		if event.pressed:
@@ -177,6 +220,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _press(mp: Vector2) -> void:
+	if waiting_next:
+		_next_level()
+		return
 	if level_done:
 		return
 	var target := _object_at(mp)
@@ -253,12 +299,15 @@ func _hidden_in_container(it: Item) -> bool:
 func _click_box(box: Box) -> void:
 	if not box.opened:
 		box.open()
+		sfx.play("box_open")
 		return
 	if box.loose_item:
 		box.shake()
+		sfx.play("bump")
 		return
 	if box.contents.is_empty():
 		box.fold_away()
+		sfx.play("box_fold")
 		hovered = null
 		return
 	var it: Item = _find_item(box.contents.pop_back())
@@ -278,6 +327,7 @@ func _click_box(box: Box) -> void:
 	t.tween_property(it, "position", target, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	t.tween_property(it, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	box.squash(0.1, 0.15)
+	sfx.play("pop")
 	if not first_item_taken:
 		first_item_taken = true
 		hint.text = "ПЕРЕТАЩИ ВЕЩЬ НА ЕЁ МЕСТО"
@@ -292,10 +342,9 @@ func _find_item(id: String) -> Item:
 
 func _apply_container(id: String) -> void:
 	var c: Dictionary = containers[id]
-	var d: Dictionary = c["data"]
 	var art: Dictionary = c["art"]
 	var s: PixelSprite = c["sprite"]
-	s.set_tex(load(d["open"] if c["open"] else d["closed"]), Vector2.ZERO)
+	s.set_tex(load(art["open"] if c["open"] else art["closed"]), Vector2.ZERO)
 	s.position = art["open_pos"] if c["open"] else art["closed_pos"]
 	s.z_index = Z_WORLD + int(art["open_depth"] if c["open"] else art["closed_depth"])
 
@@ -303,6 +352,7 @@ func _apply_container(id: String) -> void:
 func _toggle_container(id: String) -> void:
 	containers[id]["open"] = not containers[id]["open"]
 	_apply_container(id)
+	sfx.play("door_open" if containers[id]["open"] else "door_close")
 	var s: PixelSprite = containers[id]["sprite"]
 	s.set_outline(false)
 	s.squash(0.05, 0.12)
@@ -325,6 +375,7 @@ func _start_drag(it: Item, mp: Vector2) -> void:
 	it.set_outline(false)
 	drag_offset = it.position - mp
 	it.squash(-0.1, 0.12)
+	sfx.play("pick")
 
 
 func _drop(it: Item) -> void:
@@ -350,6 +401,7 @@ func _place(it: Item, z: Dictionary, wpos: Vector3) -> void:
 	var t := it.new_tween()
 	t.tween_property(it, "position", Iso.to_screen(wpos).round(), 0.06)
 	t.tween_callback(it.squash.bind(0.2, 0.2))
+	sfx.play("place_" + it.snd)
 
 
 func _return_home(it: Item) -> void:
@@ -357,6 +409,7 @@ func _return_home(it: Item) -> void:
 	it.zone = it.home_zone
 	it.wpos = it.home
 	it.z_index = Z_LOOSE if it.home_state == Item.State.LOOSE else Z_WORLD + Iso.depth(it.home)
+	sfx.play("bump", -6.0)
 	var t := it.new_tween()
 	t.tween_property(it, "position", Iso.to_screen(it.home).round(), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	t.tween_callback(it.squash.bind(0.15, 0.15))
@@ -436,6 +489,8 @@ func _check_level() -> void:
 		if it.is_misplaced():
 			wrong += 1
 	if wrong > 0:
+		if not showing_wrong:
+			sfx.play("wrong")
 		showing_wrong = true
 		hint.text = "КОЕ-ЧТО ЛЕЖИТ НЕ НА СВОЁМ МЕСТЕ"
 	else:
@@ -464,6 +519,19 @@ func _finish() -> void:
 	if hovered:
 		hovered.set_outline(false)
 		hovered = null
-	banner = _make_banner(data["done_text"], "R - ЕЩЁ РАЗ   ESC - ВЫХОД")
+	sfx.play("complete", 0.0, 0.0)
+	var last := level_index == LEVELS.size() - 1
+	if last:
+		banner = _make_banner("ВСЁ РАСПАКОВАНО!", "СПАСИБО ЗА ИГРУ   R - ЕЩЁ РАЗ   ESC - ВЫХОД")
+	else:
+		banner = _make_banner(data["done_text"], "НАЖМИ, ЧТОБЫ ПРОДОЛЖИТЬ")
 	banner.modulate.a = 0.0
-	create_tween().tween_property(banner, "modulate:a", 1.0, 0.4)
+	var t := create_tween()
+	t.tween_interval(0.5)
+	t.tween_property(banner, "modulate:a", 1.0, 0.4)
+	t.tween_callback(func(): waiting_next = not last)
+
+
+func _next_level() -> void:
+	waiting_next = false
+	load_level((level_index + 1) % LEVELS.size())
