@@ -1,0 +1,9 @@
+# Godot
+game/.godot/
+*.translation
+# сборки
+build/
+*.exe
+*.pck
+# python
+__pycache__/
