@@ -196,7 +196,7 @@ def prims():
     p.append(box(3, 56.5, 0, 9, 66.5, 16, Mat(top="S", left="x", right="x", edge="o", hi="s"), speaker_tex))
     p.append(cyl(118, 66, 6, 0, 9, Mat(top="g", left="G", right="h", edge="H", hi="D"),
                  lambda x, y, z, f, k, nz: shift(k, -1) if (f == FACE_TOP and math.hypot(x - 118, y - 66) > 4.6) or (f != FACE_TOP and z < 2) else None))
-    # декор: стопка журналов под столом, напольная подушка
+    # декор: стопка журналов под столом
     M_MAG = Mat(top="W", left="c", right="C", edge="K", hi="W")
     p.append(box(58, 52, 5, 70, 60, 6, M_MAG))
     p.append(box(59, 53, 6, 69, 59, 7, Mat(top="l", left="L", right="z", edge="Z")))
