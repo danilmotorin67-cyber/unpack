@@ -81,7 +81,7 @@ def tent_tex(x, y, z, face, k, nz):
 
 def chest_tex(x, y, z, face, k, nz):
     if face == FACE_LEFT:
-        if abs(z - 7) < 2.2 and abs(x - 52) < 2.2 and (abs(x - 52) < 0.6 or abs(z - 7) < 0.6):
+        if abs(z - 7.5) < 2.4 and abs(x - 52) < 2.4 and (abs(x - 52) < 0.6 or abs(z - 7.5) < 0.6):
             return "X"
         if z < 1.6 or z > 12.6:
             return shift(k, -1)
@@ -111,11 +111,11 @@ def prims():
         p.append(box(16 + dx * 0.6 - 0.4, 16 + dy * 0.6 - 0.4, 41, 16 + dx * 0.6 + 0.4, 16 + dy * 0.6 + 0.4, 47, M_WOOD))
     # сундук для игрушек (крышка — отдельный спрайт)
     p += [
-        box(40, 0, 0, 64, 14, 1.5, M_CHEST),
-        box(40, 0, 1.5, 64, 1, 14, M_CHEST),
-        box(40, 13, 1.5, 64, 14, 14, M_CHEST, chest_tex),
-        box(40, 1, 1.5, 41, 13, 14, M_CHEST),
-        box(63, 1, 1.5, 64, 13, 14, M_CHEST),
+        box(35, 0, 0, 69, 17, 1.5, M_CHEST),
+        box(35, 0, 1.5, 69, 1, 14, M_CHEST),
+        box(35, 16, 1.5, 69, 17, 14, M_CHEST, chest_tex),
+        box(35, 1, 1.5, 36, 16, 14, M_CHEST),
+        box(68, 1, 1.5, 69, 16, 14, M_CHEST),
     ]
     # стеллаж-кубики 3×2 и полка над ним
     p += [
@@ -159,10 +159,10 @@ def prims():
 DOORS = [
     {
         "id": "chest",
-        "closed": [box(39.6, 0, 14, 64.4, 14.4, 16.6, M_CHEST, lambda x, y, z, f, k, nz: "X" if f == FACE_TOP and math.hypot(x - 52, y - 7) < 1.6 else None)],
-        "open": [box(39.6, 0, 14, 64.4, 2.6, 38.4, M_CHEST)],
-        "closed_depth": 64.4 + 14.4,
-        "open_depth": 64.4 + 2.6,
+        "closed": [box(34.6, 0, 14, 69.4, 17.4, 16.6, M_CHEST, lambda x, y, z, f, k, nz: "X" if f == FACE_TOP and math.hypot(x - 52, y - 8.5) < 1.6 else None)],
+        "open": [box(34.6, 0, 14, 69.4, 2.6, 41.4, M_CHEST)],
+        "closed_depth": 69.4 + 17.4,
+        "open_depth": 69.4 + 2.6,
     },
 ]
 
@@ -170,16 +170,16 @@ CUBBY = {"y0": 0.6, "y1": 15, "tag": "cubby"}
 ZONES = [
     {"id": "wall_l1", "tag": "wall", "wall": "L", "u0": -42, "u1": -4, "z0": 48, "z1": 82},
     {"id": "wall_l2", "tag": "wall", "wall": "L", "u0": -128, "u1": -96, "z0": 30, "z1": 82},
-    {"id": "wall_r1", "tag": "wall", "wall": "R", "u0": 30, "u1": 68, "z0": 42, "z1": 82},
+    {"id": "wall_r1", "tag": "wall", "wall": "R", "u0": 30, "u1": 69, "z0": 44, "z1": 82},
     {"id": "wall_r2", "tag": "wall", "wall": "R", "u0": 112, "u1": 146, "z0": 28, "z1": 82},
     {"id": "bed", "tag": "bed", "x0": 10, "y0": 84, "x1": 29, "y1": 118, "z": 15.6, "max_h": 40},
-    {"id": "chest", "tag": "chest", "x0": 42, "y0": 2, "x1": 62, "y1": 12, "z": 1.5, "max_h": 12, "container": "chest"},
     {"id": "cubby_00", "x0": 73, "x1": 84, "z": 1.2, "max_h": 12.5, **CUBBY},
     {"id": "cubby_01", "x0": 85, "x1": 96, "z": 1.2, "max_h": 12.5, **CUBBY},
     {"id": "cubby_02", "x0": 97, "x1": 107, "z": 1.2, "max_h": 12.5, **CUBBY},
     {"id": "cubby_10", "x0": 73, "x1": 84, "z": 15.2, "max_h": 13.5, **CUBBY},
     {"id": "cubby_11", "x0": 85, "x1": 96, "z": 15.2, "max_h": 13.5, **CUBBY},
     {"id": "cubby_12", "x0": 97, "x1": 107, "z": 15.2, "max_h": 13.5, **CUBBY},
+    {"id": "chest", "tag": "chest", "x0": 37, "y0": 2, "x1": 67, "y1": 15, "z": 1.5, "max_h": 14, "container": "chest"},
     {"id": "shelf", "tag": "shelf", "x0": 72, "y0": 0, "x1": 108, "y1": 11, "z": 52.4, "max_h": 28},
     {"id": "table", "tag": "table", "x0": 100, "y0": 60, "x1": 120, "y1": 80, "z": 17, "max_h": 40},
 ]
