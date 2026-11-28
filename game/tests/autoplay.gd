@@ -87,8 +87,12 @@ func play_level(level: int) -> void:
 				return fail("нет предмета над коробкой")
 			var target = null
 			print("   take ", it.id)
-			# «не туда» кладём самую последнюю вещь уровня: её уже никто не загородит
-			var last_item: bool = box == main.boxes[-1] and box.contents.is_empty()
+			# «не туда» кладём последнюю обычную (не настенную) вещь уровня:
+			# после неё ставятся только картины, а они висят позади и не загородят её
+			var last_item: bool = box == main.boxes[-1] and not it.is_wall
+			for rest_id in box.contents:
+				if not main._find_item(rest_id).is_wall:
+					last_item = false
 			if wrong_item == null and last_item:
 				target = find_target(it, false)
 				if target != null:
