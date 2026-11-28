@@ -113,8 +113,8 @@ def speaker_tex(x, y, z, face, k, nz):
     """Колонка: большой и малый динамики с ободками."""
     if face != FACE_RIGHT:
         return None
-    for cz, r in ((9.8, 2.6), (3.8, 1.6)):
-        d = math.hypot(y - 61, z - cz)
+    for cz, r in ((10.2, 3.0), (4.0, 1.9)):
+        d = math.hypot(y - 61.5, z - cz)
         if d < r:
             if d > r - 0.7:
                 return "s"
@@ -192,7 +192,8 @@ def prims():
     ]
     # шторы, колонка у телевизора, пуф
     p += curtain(62, 98, 44, 76, M_CURTAIN)
-    p.append(box(3, 58, 0, 10, 64, 15, Mat(top="S", left="x", right="8", edge="o", hi="s"), speaker_tex))
+    # колонка: широкой гранью к комнате, динамики по центру грани
+    p.append(box(3, 56.5, 0, 9, 66.5, 16, Mat(top="S", left="x", right="x", edge="o", hi="s"), speaker_tex))
     p.append(cyl(118, 66, 6, 0, 9, Mat(top="g", left="G", right="h", edge="H", hi="D"),
                  lambda x, y, z, f, k, nz: shift(k, -1) if (f == FACE_TOP and math.hypot(x - 118, y - 66) > 4.6) or (f != FACE_TOP and z < 2) else None))
     # декор: стопка журналов под столом, напольная подушка

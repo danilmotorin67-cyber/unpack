@@ -392,7 +392,11 @@ class Canvas:
             mask = filled & far
             for y, x in zip(*np.nonzero(mask)):
                 if self.prims[pid[y, x]].mat.edge:
-                    key[y, x] = KEY_INDEX[shift(KEYS[self.key[y, x]], -2)]
+                    k = KEYS[self.key[y, x]]
+                    # контур — на два тона темнее; если тон уже самый тёмный
+                    # в рампе, темнее некуда — берём общий тёмный контур
+                    _, idx = RAMP_OF[k]
+                    key[y, x] = KEY_INDEX["o" if idx == 0 and k != "o" else shift(k, -2)]
         self.final = key
         return self
 

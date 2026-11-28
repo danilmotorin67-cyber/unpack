@@ -264,6 +264,9 @@ def under(tex, pattern):
             return r
         if face == FACE_TOP or z < 3.2 or z > RH - 1.5:
             return None
+        # торцы стен (срез толщины стены) — без узора
+        if x < -0.05 or y < -0.05:
+            return None
         u = y if face == FACE_RIGHT else x
         return pattern(u, z, k)
     return t
