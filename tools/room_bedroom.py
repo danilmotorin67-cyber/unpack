@@ -9,6 +9,7 @@ NAME = "bedroom"
 M_BED = Mat(top="W", left="c", right="C", edge="K", hi="W")
 M_BLANKET = Mat(top="l", left="L", right="z", edge="Z", hi="t")
 M_LIGHT_WOOD = Mat(top="q", left="f", right="F", edge="p", hi="W")
+M_TV_WIRE = Mat(top="m", left="d", right="d", edge="o")
 M_WARDROBE_IN = Mat(top="c", left="C", right="k", edge="K", hi="W")
 
 WIN = (44, 90, 48, 76)
@@ -121,8 +122,12 @@ def prims():
         box(108, 0, 56, 144, 12, 59, M_WOOD),
         box(112, 0, 50, 114, 9, 56, M_WOOD),
         box(138, 0, 50, 140, 9, 56, M_WOOD),
-        cyl(122, 40, 4.5, 12, 15, M_LIGHT_WOOD),
-        cyl(122, 40, 1.2, 0, 12, M_WOOD),
+        # табурет: сиденье, три ножки, перекладина
+        cyl(122, 40, 4.5, 12, 14.6, M_LIGHT_WOOD),
+        box(118.6, 37.4, 0, 120, 38.8, 12, M_WOOD),
+        box(124, 37.4, 0, 125.4, 38.8, 12, M_WOOD),
+        box(121.3, 42.4, 0, 122.7, 43.8, 12, M_WOOD),
+        box(119.3, 38, 5, 124.7, 38.6, 6, M_WOOD),
     ]
     # декор: корзина для белья и тапочки у кровати
     M_BASKET = Mat(top="b", left="B", right="n", edge="N", hi="U")
@@ -137,9 +142,22 @@ def prims():
         gx = 104 + i * 3.4
         gz = 78 - 3.2 * math.sin(math.pi * i / 12)
         p.append(sphere(gx, 1.2, gz, 0.75, Mat(top="X", left="y", right="Y", edge="$") if i % 2 else Mat(top="V", left="i", right="r", edge="R")))
+        # провод между лампочками: короткие отрезки по дуге
+        if i < 12:
+            for t in (0.25, 0.5, 0.75):
+                wx = gx + 3.4 * t
+                wz = 78 - 3.2 * math.sin(math.pi * (i + t) / 12) + 0.9
+                p.append(box(wx - 0.6, 0.2, wz - 0.25, wx + 0.6, 0.7, wz + 0.25, M_TV_WIRE))
     M_BAG = Mat(top="l", left="L", right="z", edge="Z")
-    p.append(box(98, 30, 0, 106, 36, 10, M_BAG, puff(98, 30, 106, 36, 0, 10, edge=1.6)))
-    p.append(box(99.5, 35.5, 2, 104.5, 37, 6, M_BAG))
+    # рюкзак: корпус, клапан сверху, карман спереди, лямки сзади
+    M_BAG_DARK = Mat(top="L", left="z", right="Z", edge="7")
+    p.append(box(98, 30, 0, 106, 35.6, 10, M_BAG, puff(98, 30, 106, 35.6, 0, 10, edge=1.6)))
+    p.append(box(97.6, 31, 7.4, 106.4, 36, 10.6, M_BAG_DARK, puff(97.6, 31, 106.4, 36, 7.4, 10.6, edge=1.0)))
+    p.append(box(99.5, 35.6, 1.6, 104.5, 37.2, 6, M_BAG, puff(99.5, 35.6, 104.5, 37.2, 1.6, 6, edge=0.8)))
+    p.append(box(101.4, 37.2, 4.6, 102.6, 37.6, 5.4, Mat(top="s", left="S", right="x", edge="x")))
+    for sx in (99.4, 103.4):
+        p.append(box(sx, 29.2, 1, sx + 1.2, 30, 9.5, M_BAG_DARK))
+    p.append(box(101, 33, 10.6, 103, 34, 12, M_BAG_DARK))
     return p
 
 

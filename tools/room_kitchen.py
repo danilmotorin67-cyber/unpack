@@ -181,10 +181,14 @@ def prims():
     p.append(box(0, 0, COUNTER_H, 108, 30, TOP_H, M_TOP, counter_r_tex))
     p.append(box(0, 30, COUNTER_H, 30, 108, TOP_H, M_TOP, counter_l_tex))
     # кран
-    p.append(cyl(3.5, 68, 2, TOP_H, TOP_H + 1, M_METAL))
-    p.append(cyl(3.5, 68, 1.3, TOP_H, 49, M_METAL))
-    p.append(box(3, 66.8, 47, 11, 69.2, 49.4, M_METAL))
-    p.append(box(9, 66.8, 44.5, 11, 69.2, 47, M_METAL))
+    # кран: шайба, высокий гусак, носик над мойкой, рычаг сверху
+    M_CHROME = Mat(top="M", left="s", right="S", edge="x", hi="M", gloss=True)
+    p.append(cyl(4, 68, 2.4, TOP_H, TOP_H + 1.2, M_CHROME))
+    p.append(cyl(4, 68, 1.2, TOP_H + 1.2, 53, M_CHROME))
+    p.append(box(3, 67, 51.4, 12.5, 69, 53.4, M_CHROME))
+    p.append(box(11, 67, 48, 12.8, 69, 51.4, M_CHROME))
+    p.append(box(2.6, 67.4, 53.4, 4.6, 68.6, 54.4, M_CHROME))
+    p.append(box(2, 67.5, 53.6, 2.8, 68.5, 57, M_CHROME))
     # подоконник
     p.append(box(0, 42, 48, 9, 94, 50.5, M_TOP))
     # полка и кронштейны
@@ -194,7 +198,7 @@ def prims():
     # холодильник (корпус, внутри полки; дверь — отдельный спрайт)
     p.append(box(112, 0, 0, 142, 28, 6, M_CREAM, fridge_base_tex))
     p.append(box(112, 0, 77, 142, 28, 80, M_CREAM))
-    p.append(box(112, 0, 6, 142, 2, 77, M_FRIDGE_IN))
+    p.append(box(114, 0, 6, 140, 2, 77, M_FRIDGE_IN))  # задняя стенка — внутри корпуса
     p.append(box(112, 0, 6, 114, 28, 77, M_CREAM_IN))
     p.append(box(140, 0, 6, 142, 28, 77, M_CREAM))
     p.append(box(114, 2, 29, 140, 27, 31, M_SHELF_IN))

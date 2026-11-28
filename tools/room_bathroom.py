@@ -6,7 +6,7 @@ from palette import shift
 
 NAME = "bathroom"
 
-M_TILE_FLOOR = Mat(top="W", left="k", right="K", edge="K", hi="W")
+M_TILE_FLOOR = Mat(top="W", left="^", right="~", edge="~", hi="W")
 M_TUB = Mat(top="W", left="c", right="C", edge="K", hi="W")
 M_TUB_IN = Mat(top="c", left="c", right="C", edge="k", hi="W")
 M_MIRROR_IN = Mat(top="c", left="C", right="k", edge="K", hi="W")
@@ -16,6 +16,7 @@ WIN = (72, 104, 52, 76)  # окно на левой стене: y0, y1, z0, z1
 
 
 def floor_tex(x, y, z, face, k, nz):
+    """Пол: розово-белая шахматка, мягкий розовый; затирка чуть темнее."""
     if face != FACE_TOP or z < -0.5:
         return None
     # коврик у ванны
@@ -24,12 +25,12 @@ def floor_tex(x, y, z, face, k, nz):
             return "L"
         return "l" if int((y - 78) // 3) % 2 else "t"
     if (x % 10) < 0.8 or (y % 10) < 0.8:
-        return "T"
+        return "^"
     lit = x > 30 and (WIN[0] - 4 + 0.3 * x) < y < (WIN[1] + 0.3 * x)
-    checker = (int(x // 10) + int(y // 10)) % 2
+    pink = (int(x // 10) + int(y // 10)) % 2
     if lit:
-        return "W"
-    return "t" if checker else "W"
+        return "_" if pink else "W"
+    return "*" if pink else "W"
 
 
 def tiles(u, z, tile="t", grout="T"):

@@ -109,6 +109,19 @@ def sofa_tex(x, y, z, face, k, nz):
 M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
 
 
+def speaker_tex(x, y, z, face, k, nz):
+    """Колонка: большой и малый динамики с ободками."""
+    if face != FACE_RIGHT:
+        return None
+    for cz, r in ((9.8, 2.6), (3.8, 1.6)):
+        d = math.hypot(y - 61, z - cz)
+        if d < r:
+            if d > r - 0.7:
+                return "s"
+            return "x" if d < 0.7 else "o"
+    return None
+
+
 def prims():
     p = shell(floor_tex, under(wall_left_tex, damask), under(wall_right_tex, damask))
     # большое растение в углу
@@ -127,7 +140,10 @@ def prims():
     ]
     # диван вдоль правой стены
     p += [
-        box(30, 0, 0, 90, 24, 10, M_SOFA, sofa_tex),
+        box(30, 0, 2.5, 90, 24, 10, M_SOFA, sofa_tex),
+        # деревянные ножки дивана
+        box(31, 1, 0, 33, 3, 2.5, M_WOOD), box(87, 1, 0, 89, 3, 2.5, M_WOOD),
+        box(31, 21, 0, 33, 23, 2.5, M_WOOD), box(87, 21, 0, 89, 23, 2.5, M_WOOD),
         box(36, 6, 10, 60, 24, 16, M_SOFA, puff(36, 6, 60, 24, 10, 16, edge=1.8)),
         box(60, 6, 10, 84, 24, 16, M_SOFA, puff(60, 6, 84, 24, 10, 16, edge=1.8)),
         box(30, 0, 10, 90, 4, 30, M_SOFA, puff(30, 0, 90, 4, edge=1.2)),
@@ -176,7 +192,7 @@ def prims():
     ]
     # шторы, колонка у телевизора, пуф
     p += curtain(62, 98, 44, 76, M_CURTAIN)
-    p.append(box(3, 58, 0, 10, 64, 15, M_TV, lambda x, y, z, f, k, nz: "m" if f == FACE_RIGHT and (y - 61) ** 2 + (z - 9) ** 2 < 4 else ("m" if f == FACE_RIGHT and (y - 61) ** 2 + (z - 3.5) ** 2 < 1.5 else None)))
+    p.append(box(3, 58, 0, 10, 64, 15, Mat(top="S", left="x", right="8", edge="o", hi="s"), speaker_tex))
     p.append(cyl(118, 66, 6, 0, 9, Mat(top="g", left="G", right="h", edge="H", hi="D"),
                  lambda x, y, z, f, k, nz: shift(k, -1) if (f == FACE_TOP and math.hypot(x - 118, y - 66) > 4.6) or (f != FACE_TOP and z < 2) else None))
     # декор: стопка журналов под столом, напольная подушка
