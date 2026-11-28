@@ -87,7 +87,7 @@ M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
 
 
 def prims():
-    p = shell(floor_tex, wall_left_tex, wall_right_tex)
+    p = shell(floor_tex, under(wall_left_tex, sprigs), under(wall_right_tex, sprigs))
     # кровать
     p += [
         box(0, 32, 0, 4, 102, 34, M_WOOD),

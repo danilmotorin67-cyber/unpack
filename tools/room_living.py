@@ -110,7 +110,7 @@ M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
 
 
 def prims():
-    p = shell(floor_tex, wall_left_tex, wall_right_tex)
+    p = shell(floor_tex, under(wall_left_tex, damask), under(wall_right_tex, damask))
     # большое растение в углу
     p += [
         cyl(8, 8, 5, 0, 9, M_POT),

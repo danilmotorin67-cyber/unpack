@@ -24,6 +24,7 @@ func _ready() -> void:
 		first = int(args[1]) - 1  # второй аргумент — с какого уровня начать (с 1)
 		await wait(0.1)
 		main.load_level(first)
+	await skip_intro()
 	for level in range(first, main.LEVELS.size()):
 		await play_level(level)
 		if failed:
@@ -31,6 +32,25 @@ func _ready() -> void:
 			return
 	print("ALL OK")
 	get_tree().quit()
+
+
+# Приветственный диалог: снимок и пролистывание кликами.
+func skip_intro() -> void:
+	await wait(1.2)
+	if main.dialog == null:
+		return
+	var shot := 0
+	while main.dialog != null:
+		await wait(0.9)
+		if main.dialog == null:
+			break
+		await snap("0_intro_%d" % shot)
+		shot += 1
+		await click(Vector2(400, 300))
+		await click(Vector2(400, 300))
+		if shot > 12:
+			return fail("диалог не закрывается")
+	await wait(0.5)
 
 
 func fail(msg: String) -> void:

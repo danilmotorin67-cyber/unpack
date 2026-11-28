@@ -120,7 +120,7 @@ def mirror_inner_tex(x, y, z, face, k, nz):
 
 
 def prims():
-    p = shell(floor_tex, wall_left_tex, wall_right_tex, m_floor=M_TILE_FLOOR)
+    p = shell(floor_tex, under(wall_left_tex, plaster), under(wall_right_tex, plaster), m_floor=M_TILE_FLOOR)
     # ванна вдоль левой стены
     p += [
         box(0, 66, 0, 30, 128, 4, M_TUB),

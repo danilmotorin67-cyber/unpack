@@ -6,7 +6,7 @@ extends Node
 const NAMES := [
 	"place_wood", "place_ceramic", "place_glass", "place_metal", "place_soft",
 	"place_paper", "place_plastic", "place_plant", "pick", "pop", "box_open",
-	"box_fold", "bump", "door_open", "door_close", "wrong", "complete",
+	"box_fold", "bump", "door_open", "door_close", "wrong", "complete", "blip",
 ]
 const POOL := 8
 

@@ -47,6 +47,8 @@ var cursor: Sprite2D
 var hint: PixelText
 var banner: Node2D
 var world: Node2D           # всё, что относится к текущему уровню
+var dialog: Dialog = null   # приветственный монолог (перед первой комнатой)
+var intro_done := false
 var sfx: Sfx
 var _nudges: Array[Vector2] = []
 
@@ -84,7 +86,22 @@ func load_level(index: int) -> void:
 	first_item_placed = false
 	hint.text = ""
 	_build_level()
-	_show_title()
+	if index == 0 and not intro_done:
+		_start_intro()
+	else:
+		_show_title()
+
+
+func _start_intro() -> void:
+	dialog = Dialog.new()
+	dialog.lines = preload("res://scripts/intro.gd").LINES
+	dialog.sfx = sfx
+	dialog.z_index = Z_UI
+	add_child(dialog)
+	dialog.finished.connect(func():
+		dialog = null
+		intro_done = true
+		_show_title())
 
 
 # ------------------------------------------------------------------ сборка
@@ -214,7 +231,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				if level_done:
 					load_level(level_index)
 			KEY_SPACE, KEY_ENTER:
-				if waiting_next:
+				if dialog:
+					dialog.next()
+				elif waiting_next:
 					_next_level()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var mp := get_global_mouse_position().floor()
@@ -226,6 +245,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _press(mp: Vector2) -> void:
+	if dialog:
+		dialog.next()
+		return
 	if waiting_next:
 		_next_level()
 		return
@@ -254,7 +276,7 @@ func _process(_delta: float) -> void:
 
 func _update_hover(mp: Vector2) -> void:
 	var h: Node = null
-	if not dragging and not level_done:
+	if not dragging and not level_done and dialog == null:
 		h = _object_at(mp)
 	if h != hovered:
 		if hovered and is_instance_valid(hovered):

@@ -335,6 +335,13 @@ ITEMS.update({
 
 
 ITEM_SCALE = 1.7
+# мелкие вещи рисуем крупнее, иначе на них не хватает пикселей
+SMALL_SCALE = 2.3
+SMALL_ITEMS = {
+    "remote", "candles", "spices", "soap", "perfume", "cream", "toothpaste",
+    "pencil_cup", "photo_frame", "headphones", "alarm_clock", "cheese", "duck",
+    "sponge", "cactus", "hairbrush", "soap_dish", "shower_gel", "shampoo", "glass",
+}
 
 
 def scaled(prims, k):

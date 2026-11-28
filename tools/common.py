@@ -251,3 +251,64 @@ def curtain(y0, y1, z0, z1, mat, gap=None, d=1.6):
         box(0, y1 - 1, z0 - 6, d, y1 + w, z1 + 2, mat, folds(1.4, 1, 1.9, faces=(FACE_RIGHT,))),
     ]
     return out
+
+
+# ---------------------------------------------------------------- фактура стен
+# Узор ложится только туда, где текстура комнаты ничего не нарисовала
+# (окна, плитка, розетки остаются как есть). u — координата вдоль стены.
+
+def under(tex, pattern):
+    def t(x, y, z, face, k, nz):
+        r = tex(x, y, z, face, k, nz) if tex else None
+        if r is not None:
+            return r
+        if face == FACE_TOP or z < 3.2 or z > RH - 1.5:
+            return None
+        u = y if face == FACE_RIGHT else x
+        return pattern(u, z, k)
+    return t
+
+
+def paper_dots(u, z, k):
+    """Обои в мелкий горошек, точки в шахматном порядке."""
+    row = int(z // 6)
+    cu = (u + (row % 2) * 4) % 8 - 4
+    cz = z % 6 - 3
+    if cu * cu + cz * cz < 0.9:
+        return shift(k, -1)
+    return None
+
+
+def plaster(u, z, k):
+    """Штукатурка: редкие мягкие пятнышки на ступень темнее и светлее."""
+    h = _hash(int(u * 1.4), int(z * 1.4))
+    if h % 29 == 0 or (h % 29 == 1 and _hash(int(u * 1.4) + 1, int(z * 1.4)) % 3 == 0):
+        return shift(k, -1)
+    if h % 41 == 2:
+        return shift(k, 1)
+    return None
+
+
+def sprigs(u, z, k):
+    """Веточки между полосами обоев: стебелёк и два листика."""
+    cu = u % 10 - 5
+    cz = (z + (int(u // 10) % 2) * 6) % 12 - 6
+    if abs(cu) < 0.45 and -2.2 < cz < 1.6:
+        return shift(k, -1)
+    if (abs(cu - 1) < 0.6 and abs(cz - 0.6) < 0.6) or (abs(cu + 1) < 0.6 and abs(cz + 0.8) < 0.6):
+        return shift(k, -1)
+    return None
+
+
+def damask(u, z, k):
+    """Дамаск: крестики-цветки в шахматном порядке (выше стеновых панелей)."""
+    if z < 31.5:
+        return None
+    row = int(z // 9)
+    cu = (u + (row % 2) * 6) % 12 - 6
+    cz = z % 9 - 4.5
+    if (abs(cu) < 0.5 and abs(cz) < 2.2) or (abs(cz) < 0.5 and abs(cu) < 2.2):
+        return shift(k, -1)
+    if abs(cu) + abs(cz) < 0.9:
+        return shift(k, -2)
+    return None

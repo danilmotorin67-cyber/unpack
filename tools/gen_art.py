@@ -18,7 +18,7 @@ import room_living
 from common import FONT_DIR, ORIGIN, RD, RH, ROOT, RW, SCRIPTS, SPRITES, from_map, render_door, render_room, save
 from glyphs import CURSORS, GLYPHS
 from iso import PX, render_sprite
-from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, WALL_FOOT, WALL_ITEMS, footprint, scaled
+from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, SMALL_ITEMS, SMALL_SCALE, WALL_FOOT, WALL_ITEMS, footprint, scaled
 from palette import rgba
 
 ROOMS = [room_kitchen, room_bathroom, room_bedroom, room_living]
@@ -93,7 +93,7 @@ def main():
         "const ITEMS := {",
     ]
     for name, prims in ITEMS.items():
-        prims = scaled(prims, ITEM_SCALE)
+        prims = scaled(prims, SMALL_SCALE if name in SMALL_ITEMS else ITEM_SCALE)
         img, anchor = render_sprite(prims)
         save("item_" + name, img)
         x0, y0, x1, y1, h = footprint(prims)
