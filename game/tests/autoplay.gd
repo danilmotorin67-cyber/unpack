@@ -19,7 +19,12 @@ func _ready() -> void:
 		out_dir = args[0]
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
-	for level in main.LEVELS.size():
+	var first := 0
+	if args.size() > 1:
+		first = int(args[1]) - 1  # второй аргумент — с какого уровня начать (с 1)
+		await wait(0.1)
+		main.load_level(first)
+	for level in range(first, main.LEVELS.size()):
 		await play_level(level)
 		if failed:
 			get_tree().quit(1)
@@ -61,10 +66,12 @@ func play_level(level: int) -> void:
 			if it == null:
 				return fail("нет предмета над коробкой")
 			var target = null
+			print("   take ", it.id)
 			if wrong_item == null:
 				target = find_target(it, false)
 				if target != null:
 					wrong_item = it
+					print("   wrong ", it.id, " -> ", target)
 			if target == null:
 				target = find_target(it, true)
 			if target == null:
@@ -93,7 +100,7 @@ func play_level(level: int) -> void:
 		var bad := []
 		for it in main.items:
 			if it.is_misplaced():
-				bad.append(it.id)
+				bad.append("%s@%s" % [it.id, it.zone.get("id", "?")])
 		return fail("уровень не пройден, не на месте: %s" % [bad])
 	await snap("%d_%s_4_done" % [level + 1, name])
 	for it in main.items:
@@ -134,15 +141,24 @@ func drag(it, target_screen: Vector2) -> void:
 	await wait(0.25)
 
 
+# Видимый пиксель предмета, по которому клик попадёт именно в него
+# (а не в вещь, стоящую перед ним). Сначала ищем у центра, потом по всему спрайту.
 func find_opaque(it) -> Vector2:
 	var c: Vector2 = it.position + Vector2(0, -3)
-	for r in range(0, 8):
-		for dx in range(-r, r + 1):
-			for dy in range(-r, r + 1):
-				var p := (c + Vector2(dx, dy)).floor() + Vector2(0.5, 0.5)
-				if it.hit(p) and main._object_at(p.floor()) == it:
-					return p
-	return c
+	var rect := Rect2(it.position + it.offset, it.texture.get_size())
+	var best := c
+	var best_d := INF
+	for y in range(int(rect.position.y), int(rect.end.y)):
+		for x in range(int(rect.position.x), int(rect.end.x)):
+			var p := Vector2(x, y) + Vector2(0.5, 0.5)
+			if it.hit(p) and main._object_at(p.floor()) == it:
+				var d := p.distance_squared_to(c)
+				if d < best_d:
+					best_d = d
+					best = p
+	if best_d == INF:
+		print("   WARN: ", it.id, " полностью закрыт другими вещами")
+	return best
 
 
 func find_opaque_rect(s: Sprite2D) -> Vector2:
