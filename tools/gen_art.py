@@ -15,13 +15,14 @@ import room_bathroom
 import room_bedroom
 import room_kitchen
 import room_living
+import room_kids
 from common import FONT_DIR, ORIGIN, RD, RH, ROOT, RW, SCRIPTS, SPRITES, from_map, render_door, render_room, save
 from glyphs import CURSORS, GLYPHS
 from iso import PX, render_sprite
 from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, SMALL_ITEMS, SMALL_SCALE, WALL_FOOT, WALL_ITEMS, footprint, scaled
 from palette import rgba
 
-ROOMS = [room_kitchen, room_bathroom, room_bedroom, room_living]
+ROOMS = [room_kitchen, room_bathroom, room_bedroom, room_living, room_kids]
 BODY_FOOT = {"pan", "pot", "kettle", "mug_yellow", "mug_blue", "hairbrush"}
 
 

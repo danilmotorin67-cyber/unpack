@@ -315,3 +315,27 @@ def damask(u, z, k):
     if abs(cu) + abs(cz) < 0.9:
         return shift(k, -2)
     return None
+
+
+def tint(k, base):
+    """Тот же тон (освещённость), но в рампе другого цвета: для многоцветных
+    вещей — мяча, пирамидки, кубиков. base — любой ключ нужной рампы."""
+    from palette import RAMP_OF as _R
+    ramp_k, i = _R[k]
+    ramp_b, _ = _R[base]
+    j = round(i * (len(ramp_b) - 1) / max(len(ramp_k) - 1, 1))
+    return ramp_b[j]
+
+
+def stars(u, z, k):
+    """Обои в детскую: маленькие звёздочки-крестики и точки."""
+    row = int(z // 10)
+    cu = (u + (row % 2) * 7) % 14 - 7
+    cz = z % 10 - 5
+    if (abs(cu) < 0.45 and abs(cz) < 1.6) or (abs(cz) < 0.45 and abs(cu) < 1.6):
+        return shift(k, -1)
+    du = (u + 3.5 + (row % 2) * 7) % 14 - 7
+    dz = (z + 5) % 10 - 5
+    if du * du + dz * dz < 0.35:
+        return shift(k, -1)
+    return None

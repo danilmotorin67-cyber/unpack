@@ -7,6 +7,7 @@ const LEVELS := [
 	preload("res://scripts/levels/level_02.gd"),
 	preload("res://scripts/levels/level_03.gd"),
 	preload("res://scripts/levels/level_04.gd"),
+	preload("res://scripts/levels/level_05.gd"),
 ]
 const Art := preload("res://scripts/art_data.gd")
 const CURSOR_ARROW := preload("res://assets/sprites/cursor_arrow.png")

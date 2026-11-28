@@ -621,3 +621,195 @@ ITEMS.update({
         cyl(0, 0.9, 0.6, 0, 2, I_CREAM), box(-0.1, 0.8, 2, 0.1, 1, 2.6, I_OCHRE),
     ],
 })
+
+
+# ---------------------------------------------------------------- детская
+
+I_TEDDY = Mat(top="A", left="w", right="v", edge="u")
+I_PINK = Mat(top="_", left="*", right="^", edge="~", gloss=True)
+I_MOON = Mat(top="X", left="y", right="Y", edge="$", gloss=True)
+I_PAPER = Mat(top="W", left="c", right="C", edge="K")
+
+
+def teddy_head_tex(x, y, z, face, k, nz):
+    # глаза и нос на морде мишки
+    for ex in (-0.65, 0.65):
+        if (x - ex) ** 2 + (z - 5.35) ** 2 < 0.09 and y > 0.8:
+            return "o"
+    return None
+
+
+def block_tex(color):
+    def tex(x, y, z, face, k, nz):
+        k = tint(k, color)
+        # светлая вставка-квадрат с буквой-точкой на каждой грани
+        u = x if face != FACE_RIGHT else y
+        v = z if face != FACE_TOP else y
+        fu, fv = (u + 10) % 2.4 - 1.2, (v + 10) % 2.4 - 1.2
+        if abs(fu) < 0.75 and abs(fv) < 0.75:
+            return "o" if abs(fu) < 0.28 and abs(fv) < 0.28 else shift(k, 1)
+        return k
+    return tex
+
+
+def ball_tex(x, y, z, face, k, nz):
+    if z > 2.55:
+        return tint(k, "r")
+    if abs(z - 2.1) < 0.4:
+        return tint(k, "W")
+    return None
+
+
+def drum_tex(x, y, z, face, k, nz):
+    if face != FACE_TOP and 0.5 < z < 2.2:
+        a = math.atan2(y, x)
+        if abs(((a * 4 / math.pi) % 2) - 1 - (z - 1.35) * 1.1) < 0.28:
+            return tint(k, "W")
+    return None
+
+
+def crayon_box_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT and 0.3 < z < 0.9 and abs(x) < 1.4:
+        return "W"
+    return None
+
+
+def sketch_tex(x, y, z, face, k, nz):
+    if face == FACE_TOP:
+        if y < -1.6 and (x % 0.8) < 0.35:
+            return "x"
+        if math.hypot(x - 0.8, y - 0.2) < 0.9:
+            return "y"
+        if y > 0.8 and abs(x + 0.5) < 1.6:
+            return "e"
+    return None
+
+
+def piggy_tex(x, y, z, face, k, nz):
+    if face == FACE_TOP and abs(x) < 0.7 and abs(y + 0.2) < 0.18:
+        return "~"
+    if y > 1.4 and (x - 0.5) ** 2 + (z - 2.9) ** 2 < 0.07:
+        return "o"
+    if y > 1.4 and (x + 0.5) ** 2 + (z - 2.9) ** 2 < 0.07:
+        return "o"
+    return None
+
+
+def robot_head_tex(x, y, z, face, k, nz):
+    if face == FACE_LEFT and abs(z - 5.4) < 0.35 and (abs(x - 0.45) < 0.3 or abs(x + 0.45) < 0.3):
+        return "l"
+    if face == FACE_LEFT and abs(z - 4.8) < 0.15 and abs(x) < 0.6:
+        return "x"
+    return None
+
+
+def rocket_tex(x, y, z, face, k, nz):
+    if nz < 0.6 and math.hypot(math.atan2(y, x) - math.pi / 4, (z - 4.2) * 0.9) < 0.75:
+        return "L"
+    if 1.2 < z < 1.8:
+        return tint(k, "r")
+    return None
+
+
+def kid_drawing_tex(u, v):
+    if abs(u) > 3.8 or abs(v) > 2.8:
+        return None
+    if v < -1.7:
+        return "e"
+    if -1.7 <= v < 0.3 and -2.4 < u < 0.2:
+        if -1.5 < u < -0.7 and v < -0.6:
+            return "u"
+        return "r"
+    if 0.3 <= v < 1.6 and abs(u + 1.1) < (1.6 - v) * 1.15:
+        return "R"
+    if math.hypot(u - 2.3, v - 1.5) < 0.9:
+        return "y"
+    return "W"
+
+
+def star_poster_tex(u, v):
+    if abs(u) > 3.2 or abs(v) > 4.7:
+        return None
+    if math.hypot(u + 0.8, v - 1.5) < 1.6 and math.hypot(u - 0.0, v - 2.1) > 1.3:
+        return "X"
+    for su, sv in ((1.8, 3.4), (2.2, -0.4), (-2.2, -1.8), (0.6, -3.2), (-1.5, -3.8), (2.6, 1.6)):
+        if abs(u - su) + abs(v - sv) < 0.5:
+            return "y"
+    return "Z"
+
+
+ITEMS.update({
+    "teddy_bear": [
+        sphere(0, 0, 2.2, 2.2, I_TEDDY),
+        sphere(-1.2, 1.6, 0.9, 0.9, I_TEDDY), sphere(1.2, 1.6, 0.9, 0.9, I_TEDDY),
+        sphere(-2, 0.6, 2.8, 0.8, I_TEDDY), sphere(2, 0.6, 2.8, 0.8, I_TEDDY),
+        sphere(0, 0.3, 5, 1.7, I_TEDDY, teddy_head_tex),
+        sphere(-1.2, 0, 6.4, 0.6, I_TEDDY), sphere(1.2, 0, 6.4, 0.6, I_TEDDY),
+        sphere(0, 1.7, 4.6, 0.6, Mat(top="Q", left="q", right="f", edge="p")),
+    ],
+    "blocks": [
+        box(-2.6, -1.2, 0, -0.2, 1.2, 2.4, I_TERRA, block_tex("r")),
+        box(0.2, -1.2, 0, 2.6, 1.2, 2.4, I_BLUE, block_tex("L")),
+        box(-1.2, -1.2, 2.4, 1.2, 1.2, 4.8, I_OCHRE, block_tex("Y")),
+    ],
+    "toy_car": [
+        box(-2.6, -1.2, 0.7, 2.6, 1.2, 1.9, I_TERRA),
+        box(-1.2, -1.0, 1.9, 1.1, 1.0, 2.9, I_GLASS),
+        box(-2.1, -1.45, 0, -0.9, -1.2, 1.1, I_DARK), box(0.9, -1.45, 0, 2.1, -1.2, 1.1, I_DARK),
+        box(-2.1, 1.2, 0, -0.9, 1.45, 1.1, I_DARK), box(0.9, 1.2, 0, 2.1, 1.45, 1.1, I_DARK),
+    ],
+    "ball": [sphere(0, 0, 2.1, 2.1, I_BLUE, ball_tex)],
+    "crayons": [
+        box(-2, -1.4, 0, 2, 1.4, 1.2, I_OCHRE, crayon_box_tex),
+        box(-1.6, -0.8, 1.2, -1.0, -0.2, 2.8, I_TERRA), box(-0.8, -0.8, 1.2, -0.2, -0.2, 2.4, I_BLUE),
+        box(0.0, -0.8, 1.2, 0.6, -0.2, 2.6, I_GREEN), box(0.8, -0.8, 1.2, 1.4, -0.2, 2.2, I_PINK),
+    ],
+    "sketchbook": [box(-3, -2.2, 0, 3, 2.2, 0.7, I_PAPER, sketch_tex)],
+    "picture_books": book(I_GREEN) + book(I_PINK, 1.2, 1.0, 0.5) + book(I_OCHRE, 2.2, 1.1, -0.3),
+    "night_light": [
+        cyl(0, 0, 1.4, 0, 0.8, I_WOOD),
+        cyl(0, 0, 0.3, 0.8, 1.4, I_WOOD),
+        sphere(0, 0, 3.1, 1.9, I_MOON),
+    ],
+    "piggy_bank": [
+        sphere(0, 0, 2.3, 2.1, I_PINK, piggy_tex),
+        sphere(0, 1.9, 2.4, 0.75, I_PINK),
+        box(-1.2, -0.4, 3.9, -0.6, 0.2, 4.6, I_PINK), box(0.6, -0.4, 3.9, 1.2, 0.2, 4.6, I_PINK),
+        box(-1.2, -1.0, 0, -0.6, -0.4, 0.8, I_PINK), box(0.6, -1.0, 0, 1.2, -0.4, 0.8, I_PINK),
+        box(-1.2, 0.6, 0, -0.6, 1.2, 0.8, I_PINK), box(0.6, 0.6, 0, 1.2, 1.2, 0.8, I_PINK),
+    ],
+    "robot": [
+        box(-1.0, -0.6, 0, -0.3, 0.6, 1.4, I_DARK), box(0.3, -0.6, 0, 1.0, 0.6, 1.4, I_DARK),
+        box(-1.5, -1.0, 1.4, 1.5, 1.0, 4.2, I_SILVER),
+        box(-0.6, 1.0, 2.2, 0.6, 1.2, 3.4, I_TERRA),
+        box(-1.1, -0.9, 4.2, 1.1, 0.9, 6.0, I_SILVER, robot_head_tex),
+        box(-0.15, -0.15, 6.0, 0.15, 0.15, 7.0, I_DARK),
+        sphere(0, 0, 7.2, 0.4, I_TERRA),
+    ],
+    "ring_pyramid": [
+        cyl(0, 0, 2.4, 0, 0.6, I_WOOD),
+        cyl(0, 0, 2.2, 0.6, 1.4, I_TERRA), cyl(0, 0, 1.9, 1.4, 2.2, I_OCHRE),
+        cyl(0, 0, 1.6, 2.2, 3.0, I_GREEN), cyl(0, 0, 1.3, 3.0, 3.8, I_BLUE),
+        cyl(0, 0, 1.0, 3.8, 4.5, I_PINK), sphere(0, 0, 5.0, 0.7, I_TERRA),
+    ],
+    "drum": [
+        cyl(0, 0, 2.4, 0, 2.6, I_TERRA, drum_tex),
+        cyl(0, 0, 2.5, 2.6, 2.95, I_WHITE),
+        box(-0.15, 1.6, 2.95, 0.15, 3.6, 3.25, I_WOOD),
+    ],
+    "toy_rocket": [
+        cyl(0, 0, 1.1, 0.8, 5.6, I_WHITE, rocket_tex),
+        cyl(0, 0, 0.8, 5.6, 6.4, I_TERRA), cyl(0, 0, 0.45, 6.4, 7.1, I_TERRA),
+        box(-1.9, -0.15, 0, -0.9, 0.15, 2.2, I_TERRA), box(0.9, -0.15, 0, 1.9, 0.15, 2.2, I_TERRA),
+        box(-0.15, 0.9, 0, 0.15, 1.9, 2.2, I_TERRA),
+    ],
+})
+
+WALL_ITEMS.update({
+    "kid_drawing": lambda s: [wall_box(-4, 4, -3, 3, 0, 0.2, I_PAPER, kid_drawing_tex, s)],
+    "star_poster": lambda s: [wall_box(-3.5, 3.5, -5, 5, 0, 0.3, I_WOOD, star_poster_tex, s)],
+})
+WALL_FOOT.update({
+    "kid_drawing": (-4, -3, 4, 3),
+    "star_poster": (-3.5, -5, 3.5, 5),
+})
