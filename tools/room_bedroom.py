@@ -45,15 +45,6 @@ def wall_right_tex(x, y, z, face, k, nz):
         return None
     if z < 3:
         return "k"
-    # постер
-    if 12 <= x <= 40 and 42 <= z <= 70:
-        if x < 13.2 or x > 38.8 or z < 43.2 or z > 68.8:
-            return "w"
-        if math.hypot(x - 26, z - 60) < 4:
-            return "y"
-        if z < 50 + 5 * math.sin((x - 12) / 4):
-            return "L"
-        return "t"
     if (x % 10) < 1:
         return "k"
     return None
@@ -141,6 +132,8 @@ DOORS = [
 
 WARDROBE = {"x0": 60, "y0": 1, "x1": 96, "y1": 23, "container": "wardrobe"}
 ZONES = [
+    {"id": "wall_r", "tag": "wall", "wall": "R", "u0": 4, "u1": 55, "z0": 36, "z1": 82},
+    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -128, "u1": -96, "z0": 34, "z1": 82},
     {"id": "bed", "tag": "bed", "x0": 18, "y0": 37, "x1": 46, "y1": 97, "z": 21, "max_h": 40},
     {"id": "nightstand", "tag": "nightstand", "x0": 0, "y0": 104, "x1": 18, "y1": 122, "z": 22, "max_h": 40},
     {"id": "wardrobe_0", "tag": "wardrobe", **WARDROBE, "z": 4, "max_h": 24},

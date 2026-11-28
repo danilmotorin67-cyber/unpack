@@ -24,8 +24,12 @@ RGBA = np.array([rgba(k) for k in KEYS], dtype=np.uint8)
 FACE_RIGHT, FACE_LEFT, FACE_TOP = 0, 1, 2  # +x, +y, +z
 
 
+# Пикселей экрана на единицу мира по оси экрана (детализация арта).
+PX = 4.0 / 3.0
+
+
 def project(x, y, z):
-    return x - y, (x + y) / 2.0 - z
+    return PX * (x - y), PX * ((x + y) / 2.0 - z)
 
 
 class Mat:
@@ -173,8 +177,8 @@ class Canvas:
         if px0 >= px1 or py0 >= py1:
             return
         gy, gx = np.mgrid[py0:py1, px0:px1]
-        sx = gx + 0.5 - self.ox
-        sy = gy + 0.5 - self.oy
+        sx = (gx + 0.5 - self.ox) / PX
+        sy = (gy + 0.5 - self.oy) / PX
         rx = sy + sx / 2
         ry = sy - sx / 2
         t, hit, (nx, ny, nz) = _intersect(pr, rx, ry)
@@ -200,6 +204,22 @@ class Canvas:
         self.face[sl] = np.where(win, face, self.face[sl])
 
     # -------------------------------------------------------------- post
+
+    def floor_shadow(self, floor_pid, rects, darker, wall_ao=2.5):
+        """Тени на полу: под мебелью (прямоугольники x0,y0,x1,y1 в мире) и
+        мягкое затемнение у основания стен. darker — карта «тон -> темнее»."""
+        ys, xs = np.nonzero((self.pid == floor_pid) & (self.face == FACE_TOP))
+        sx = (xs + 0.5 - self.ox) / PX
+        sy = (ys + 0.5 - self.oy) / PX
+        wx = sy + sx / 2
+        wy = sy - sx / 2
+        hit = (wx < wall_ao) | (wy < wall_ao)
+        for x0, y0, x1, y1 in rects:
+            hit |= (wx >= x0) & (wx <= x1) & (wy >= y0) & (wy <= y1)
+        for y, x in zip(ys[hit], xs[hit]):
+            k = KEYS[self.key[y, x]]
+            if k in darker:
+                self.key[y, x] = KEY_INDEX[darker[k]]
 
     def finish(self, edges=True, creases=True, edge_t=4.0):
         key = self.key.copy()

@@ -6,7 +6,7 @@
 #   godot --path game res://tests/autoplay.tscn -- <папка_для_скриншотов>
 extends Node
 
-const SCALE := 3.0  # окно 1440×810 при вьюпорте 480×270
+const SCALE := 2.0  # окно 1280×720 при вьюпорте 640×360
 
 var main: Node
 var out_dir := "user://"
@@ -98,7 +98,7 @@ func play_level(level: int) -> void:
 		print("  ", it.id, " -> ", it.zone.get("id", "?"), " ", it.wpos)
 	print("level %d (%s) OK" % [level + 1, name])
 	if level < main.LEVELS.size() - 1:
-		await click(Vector2(240, 200))  # «нажми, чтобы продолжить»
+		await click(Vector2(320, 300))  # «нажми, чтобы продолжить»
 		await wait(0.2)
 
 
@@ -107,14 +107,17 @@ func find_target(it, correct: bool):
 	for z in main.zones:
 		if main.containers.has(z.get("container", "")) and not main.containers[z["container"]]["open"]:
 			continue
-		if it.allowed.has(z["tag"]) != correct or it.height > z["max_h"]:
+		if main.is_wall_zone(z) != it.is_wall:
 			continue
+		if it.allowed.has(z["tag"]) != correct or (not it.is_wall and it.height > z["max_h"]):
+			continue
+		var area: Rect2 = main.zone_area(z)
 		for fx in [0.25, 0.75, 0.5]:
 			for fy in [0.25, 0.75, 0.5]:
-				var c := Vector2(lerpf(z["x0"], z["x1"], fx), lerpf(z["y0"], z["y1"], fy))
+				var c := area.position + area.size * Vector2(fx, fy)
 				var p = main._free_pos(it, z, c)
 				if p != null:
-					return Vector3(p.x, p.y, z["z"])
+					return main.zone_to_world(z, p)
 	return null
 
 

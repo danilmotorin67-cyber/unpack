@@ -52,14 +52,6 @@ def wall_left_tex(x, y, z, face, k, nz):
         if (z - TOP_H) % 4.5 < 0.8 or ((y + (row % 2) * 4) % 8) < 0.9:
             return "C"
         return "W"
-    # часы
-    d = math.hypot(y - 16, z - 68)
-    if d < 6.3:
-        if d > 5.2:
-            return "o"
-        if (abs(y - 16) < 0.6 and 68 <= z < 72.5) or (abs(z - 68) < 0.6 and 16 <= y < 19.5):
-            return "o"
-        return "W"
     return None
 
 
@@ -74,13 +66,6 @@ def wall_right_tex(x, y, z, face, k, nz):
         if (z - TOP_H) % 4.5 < 0.8 or ((x + (row % 2) * 4.5) % 9) < 0.9:
             return "k"
         return "c"
-    # картина
-    if 6 <= x <= 22 and 62 <= z <= 80:
-        if x < 7.5 or x > 20.5 or z < 63.5 or z > 78.5:
-            return "w"
-        if z < 66 + 4 * math.sin((x - 6) / 3):
-            return "e"
-        return "T"
     return None
 
 
@@ -232,6 +217,9 @@ DOORS = [
 ]
 
 ZONES = [
+    # на стенах: левая — u вдоль стены (u = -y), правая — u = x
+    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -40, "u1": -6, "z0": 50, "z1": 82},
+    {"id": "wall_r", "tag": "wall", "wall": "R", "u0": 2, "u1": 24, "z0": 63, "z1": 82},
     {"id": "sill", "tag": "sill", "x0": 0, "y0": 43, "x1": 9, "y1": 93, "z": 50.5, "max_h": 30},
     {"id": "shelf", "tag": "shelf", "x0": 25, "y0": 0, "x1": 100, "y1": 15, "z": 73, "max_h": 12},
     {"id": "counter_r", "tag": "counter", "x0": 0, "y0": 0, "x1": 60, "y1": 30, "z": TOP_H, "max_h": 24},

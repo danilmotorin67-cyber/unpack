@@ -6,13 +6,14 @@ const LEVELS := [
 	preload("res://scripts/levels/level_01.gd"),
 	preload("res://scripts/levels/level_02.gd"),
 	preload("res://scripts/levels/level_03.gd"),
+	preload("res://scripts/levels/level_04.gd"),
 ]
 const Art := preload("res://scripts/art_data.gd")
 const CURSOR_ARROW := preload("res://assets/sprites/cursor_arrow.png")
 const CURSOR_HAND := preload("res://assets/sprites/cursor_hand.png")
 const CURSOR_GRAB := preload("res://assets/sprites/cursor_grab.png")
 
-const VIEW := Vector2(480, 270)
+const VIEW := Vector2(640, 360)
 
 # Слои: фон -> объекты в комнате (сортируются по глубине) -> висящие/тащимые вещи -> UI
 const Z_BG := -100
@@ -121,7 +122,12 @@ func _build_level() -> void:
 			it.snd = item_defs[id].get("snd", "wood")
 			it.foot = info["foot"]
 			it.height = info["h"]
-			it.set_tex(load("res://assets/sprites/item_%s.png" % id), info["anchor"])
+			if info.get("wall", false):
+				it.setup_wall(
+					load("res://assets/sprites/item_%s_l.png" % id), info["anchor_l"],
+					load("res://assets/sprites/item_%s_r.png" % id), info["anchor_r"])
+			else:
+				it.set_tex(load("res://assets/sprites/item_%s.png" % id), info["anchor"])
 			it.visible = false
 			world.add_child(it)
 			items.append(it)
@@ -145,7 +151,7 @@ func _build_ui() -> void:
 func _make_banner(title: String, subtitle: String) -> Node2D:
 	var root := Node2D.new()
 	root.z_index = Z_UI
-	var top := 112.0
+	var top := VIEW.y / 2 - 22
 	var h := 38.0 if subtitle != "" else 30.0
 	var band := ColorRect.new()
 	band.color = Color("2e2430")
@@ -241,6 +247,7 @@ func _process(_delta: float) -> void:
 	cursor.position = mp
 	if dragging:
 		dragging.position = (mp + drag_offset).round()
+		_update_drag_side(dragging)
 	_update_hover(mp)
 	_update_wrong_blink()
 
@@ -320,6 +327,9 @@ func _click_box(box: Box) -> void:
 	it.home = it.wpos
 	it.home_state = Item.State.LOOSE
 	it.home_zone = {}
+	if it.is_wall:
+		it.set_wall_side("R")
+		it.home_side = "R"
 	var target := Iso.to_screen(it.wpos).round()
 	it.position = Iso.to_screen(box.wpos + Vector3(0, 0, 8)).round()
 	it.scale = Vector2(0.5, 0.5)
@@ -369,6 +379,8 @@ func _start_drag(it: Item, mp: Vector2) -> void:
 		it.home = it.wpos
 		it.home_state = Item.State.PLACED
 		it.home_zone = it.zone
+		it.home_zpos = it.zpos
+		it.home_side = it.wall_side
 	it.state = Item.State.DRAGGED
 	it.zone = {}
 	it.z_index = Z_DRAG
@@ -376,6 +388,19 @@ func _start_drag(it: Item, mp: Vector2) -> void:
 	drag_offset = it.position - mp
 	it.squash(-0.1, 0.12)
 	sfx.play("pick")
+
+
+# Пока тащим настенную вещь, разворачиваем её к той стене, над которой она.
+func _update_drag_side(it: Item) -> void:
+	if not it.is_wall:
+		return
+	for c in _spot_candidates(it):
+		var side: String = c["zone"]["wall"]
+		if side != it.wall_side:
+			var before := it.position
+			it.set_wall_side(side)
+			it.position = before
+		return
 
 
 func _drop(it: Item) -> void:
@@ -386,20 +411,23 @@ func _drop(it: Item) -> void:
 	if it.from_box:
 		it.from_box.loose_item = null
 		it.from_box = null
-	_place(it, spot["zone"], spot["pos"])
+	_place(it, spot["zone"], spot["zpos"])
 	if not first_item_placed:
 		first_item_placed = true
 		hint.text = ""
 	_check_level()
 
 
-func _place(it: Item, z: Dictionary, wpos: Vector3) -> void:
+func _place(it: Item, z: Dictionary, zpos: Vector2) -> void:
 	it.state = Item.State.PLACED
 	it.zone = z
-	it.wpos = wpos
-	it.z_index = Z_WORLD + Iso.depth(wpos)
+	it.zpos = zpos
+	it.wpos = zone_to_world(z, zpos)
+	if it.is_wall:
+		it.set_wall_side(z["wall"])
+	it.z_index = Z_WORLD + Iso.depth(it.wpos)
 	var t := it.new_tween()
-	t.tween_property(it, "position", Iso.to_screen(wpos).round(), 0.06)
+	t.tween_property(it, "position", Iso.to_screen(it.wpos).round(), 0.06)
 	t.tween_callback(it.squash.bind(0.2, 0.2))
 	sfx.play("place_" + it.snd)
 
@@ -407,7 +435,10 @@ func _place(it: Item, z: Dictionary, wpos: Vector3) -> void:
 func _return_home(it: Item) -> void:
 	it.state = it.home_state
 	it.zone = it.home_zone
+	it.zpos = it.home_zpos
 	it.wpos = it.home
+	if it.is_wall:
+		it.set_wall_side(it.home_side)
 	it.z_index = Z_LOOSE if it.home_state == Item.State.LOOSE else Z_WORLD + Iso.depth(it.home)
 	sfx.play("bump", -6.0)
 	var t := it.new_tween()
@@ -415,26 +446,62 @@ func _return_home(it: Item) -> void:
 	t.tween_callback(it.squash.bind(0.15, 0.15))
 
 
-# Ищет поверхность под точкой опоры предмета и свободное место на ней.
-# Если под курсором несколько поверхностей, берём ближайшую к зрителю.
-func _find_spot(it: Item) -> Dictionary:
+# ------------------------------------------------------------------ поверхности
+# У каждой зоны свои 2D-координаты: на горизонтальной поверхности (x, y),
+# на стене (u, z), где u — вдоль стены (левая: u = -y, правая: u = x).
+
+func is_wall_zone(z: Dictionary) -> bool:
+	return z.has("wall")
+
+
+func zone_area(z: Dictionary) -> Rect2:
+	if is_wall_zone(z):
+		return Rect2(z["u0"], z["z0"], z["u1"] - z["u0"], z["z1"] - z["z0"])
+	return Rect2(z["x0"], z["y0"], z["x1"] - z["x0"], z["y1"] - z["y0"])
+
+
+func zone_to_world(z: Dictionary, p: Vector2) -> Vector3:
+	if not is_wall_zone(z):
+		return Vector3(p.x, p.y, z["z"])
+	if z["wall"] == "L":
+		return Vector3(0, -p.x, p.y)
+	return Vector3(p.x, 0, p.y)
+
+
+# Точка экрана -> координаты зоны (на её плоскости).
+func screen_to_zone(z: Dictionary, s: Vector2) -> Vector2:
+	if not is_wall_zone(z):
+		return Iso.to_world(s, z["z"])
+	var w := Iso.to_wall(s, z["wall"])
+	return Vector2(-w.x if z["wall"] == "L" else w.x, w.y)
+
+
+# Зоны под точкой опоры предмета, ближайшие к зрителю — первыми.
+func _spot_candidates(it: Item) -> Array:
 	var candidates: Array = []
 	for z in zones:
+		if is_wall_zone(z) != it.is_wall:
+			continue
 		var cid: String = z.get("container", "")
 		if cid != "" and not containers[cid]["open"]:
 			continue
-		if it.height > z["max_h"]:
+		if not it.is_wall and it.height > z["max_h"]:
 			continue
-		var w := Iso.to_world(it.position, z["z"])
-		var t := SNAP_TOLERANCE
-		if w.x < z["x0"] - t or w.x > z["x1"] + t or w.y < z["y0"] - t or w.y > z["y1"] + t:
+		var p := screen_to_zone(z, it.position)
+		if not zone_area(z).grow(SNAP_TOLERANCE).has_point(p):
 			continue
-		candidates.append({"zone": z, "w": w, "depth": w.x + w.y + z["z"]})
+		var w := zone_to_world(z, p)
+		candidates.append({"zone": z, "p": p, "depth": w.x + w.y + w.z})
 	candidates.sort_custom(func(a, b): return a["depth"] > b["depth"])
-	for c in candidates:
-		var p = _free_pos(it, c["zone"], c["w"])
+	return candidates
+
+
+# Ищет поверхность под предметом и свободное место на ней.
+func _find_spot(it: Item) -> Dictionary:
+	for c in _spot_candidates(it):
+		var p = _free_pos(it, c["zone"], c["p"])
 		if p != null:
-			return {"zone": c["zone"], "pos": Vector3(p.x, p.y, c["zone"]["z"])}
+			return {"zone": c["zone"], "zpos": p}
 	return {}
 
 
@@ -446,11 +513,10 @@ func _prepare_nudges() -> void:
 	_nudges.sort_custom(func(a, b): return a.length_squared() < b.length_squared())
 
 
-# Ближайшая к желаемой позиция, где след предмета целиком на поверхности
-# и не пересекается со следами соседей.
+# Ближайшая к желаемой позиция (в координатах зоны), где след предмета
+# целиком в зоне и не пересекается со следами соседей.
 func _free_pos(it: Item, z: Dictionary, want: Vector2) -> Variant:
-	var area := Rect2(z["x0"], z["y0"], z["x1"] - z["x0"], z["y1"] - z["y0"])
-	# допустимый диапазон центра
+	var area := zone_area(z)
 	var lo := area.position - it.foot.position
 	var hi := area.end - it.foot.end
 	if lo.x > hi.x or lo.y > hi.y:
@@ -459,7 +525,7 @@ func _free_pos(it: Item, z: Dictionary, want: Vector2) -> Variant:
 	var others: Array[Rect2] = []
 	for o in items:
 		if o != it and o.state == Item.State.PLACED and o.zone.get("id") == z["id"]:
-			others.append(o.foot_at(Vector2(o.wpos.x, o.wpos.y)).grow(GAP))
+			others.append(o.foot_at(o.zpos).grow(GAP))
 	for d in _nudges:
 		var p: Vector2 = want + d
 		if p.x < lo.x or p.y < lo.y or p.x > hi.x or p.y > hi.y:

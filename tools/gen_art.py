@@ -14,13 +14,14 @@ from PIL import Image
 import room_bathroom
 import room_bedroom
 import room_kitchen
+import room_living
 from common import FONT_DIR, ORIGIN, RD, RH, ROOT, RW, SCRIPTS, SPRITES, from_map, render_door, render_room, save
 from glyphs import CURSORS, GLYPHS
-from iso import render_sprite
-from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, footprint, scaled
+from iso import PX, render_sprite
+from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, WALL_FOOT, WALL_ITEMS, footprint, scaled
 from palette import rgba
 
-ROOMS = [room_kitchen, room_bathroom, room_bedroom]
+ROOMS = [room_kitchen, room_bathroom, room_bedroom, room_living]
 BODY_FOOT = {"pan", "pot", "kettle", "mug_yellow", "mug_blue", "hairbrush"}
 
 
@@ -82,10 +83,11 @@ def main():
     out = [
         "# Сгенерировано tools/gen_art.py — не редактировать вручную.",
         "# Мировые координаты: x — вдоль правой стены, y — вдоль левой, z — вверх.",
-        "# Экран = ORIGIN + (x - y, (x + y) / 2 - z).",
+        "# Экран = ORIGIN + PX * (x - y, (x + y) / 2 - z).",
         "extends RefCounted",
         "",
         f"const ORIGIN := {v2(ORIGIN)}",
+        f"const PX := {PX!r}  # пикселей на единицу мира",
         f"const ROOM := Vector3({RW}, {RD}, {RH})",
         "",
         "const ITEMS := {",
@@ -106,6 +108,17 @@ def main():
             f'\t"{name}": {{"anchor": {v2(anchor)}, '
             f'"foot": Rect2({num(x0)}, {num(y0)}, {num(x1 - x0)}, {num(y1 - y0)}), "h": {num(h)}}},'
         )
+    # вещи на стенах: два варианта спрайта — для левой (L) и правой (R) стены
+    for name, make in WALL_ITEMS.items():
+        anchors = {}
+        for side in ("L", "R"):
+            img, anchors[side] = render_sprite(scaled(make(side), ITEM_SCALE))
+            save(f"item_{name}_{side.lower()}", img)
+        u0, v0, u1, v1 = (c * ITEM_SCALE for c in WALL_FOOT[name])
+        out.append(
+            f'\t"{name}": {{"wall": true, "anchor_l": {v2(anchors["L"])}, "anchor_r": {v2(anchors["R"])}, '
+            f'"foot": Rect2({num(u0)}, {num(v0)}, {num(u1 - u0)}, {num(v1 - v0)}), "h": 0}},'
+        )
     out.append("}")
 
     img, a_closed = render_sprite(BOX_CLOSED, outline="N")
@@ -122,7 +135,8 @@ def main():
         "}",
         "",
         "# комнаты: фон, двери (левый верхний угол спрайта, глубина для сортировки),",
-        "# поверхности (прямоугольник x0..x1, y0..y1 на высоте z)",
+        "# поверхности: горизонтальные — прямоугольник x0..x1, y0..y1 на высоте z;",
+        "# на стенах (wall = L: плоскость x=0, R: y=0) — u0..u1 вдоль стены, z0..z1 по высоте",
         "const ROOMS := {",
     ]
     for room in ROOMS:

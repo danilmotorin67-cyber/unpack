@@ -20,8 +20,8 @@ SPRITES = os.path.join(ROOT, "game", "assets", "sprites")
 FONT_DIR = os.path.join(ROOT, "game", "assets", "font")
 SCRIPTS = os.path.join(ROOT, "game", "scripts")
 
-VIEW_W, VIEW_H = 480, 270
-ORIGIN = (230, 108)
+VIEW_W, VIEW_H = 640, 360
+ORIGIN = (306, 143)
 
 # Комната
 RW, RD, RH, WALL, SLAB = 150, 130, 85, 6, 6
@@ -122,9 +122,29 @@ def window(y, z, y0, y1, z0, z1, frame="W"):
     return "t" if z > zm + 1 else "T"
 
 
+# на тон темнее — для теней
+DARKER = {
+    "q": "f", "f": "F", "F": "p", "p": "P", "W": "c", "c": "C", "C": "k", "k": "K",
+    "t": "T", "T": "S", "l": "L", "L": "z", "z": "Z", "g": "G", "G": "h", "h": "H",
+    "j": "J", "J": "k", "w": "v", "v": "u", "b": "B", "B": "n", "i": "r", "r": "R",
+    "y": "Y", "a": "e", "e": "E", "s": "S", "S": "x",
+}
+
+
+def shadow_rects(prims, grow=1.5, shift=3.0):
+    """Тени от мебели, стоящей на полу: след, чуть расширенный и сдвинутый от окна (+x)."""
+    rects = []
+    for pr in prims[3:]:  # первые три — пол и стены
+        x0, y0, z0, x1, y1, z1 = pr.bounds()
+        if z0 <= 0.5 and x1 - x0 > 1.5 and y1 - y0 > 1.5:
+            rects.append((x0 - grow, y0 - grow, x1 + grow + shift, y1 + grow + shift * 0.4))
+    return rects
+
+
 def render_room(prims):
     cv = Canvas(VIEW_W, VIEW_H, ORIGIN)
     cv.add(prims)
+    cv.floor_shadow(0, shadow_rects(prims), DARKER)
     cv.finish()
     img = cv.image()
     a = np.array(img)

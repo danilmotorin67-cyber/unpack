@@ -21,10 +21,11 @@ const DATA := {
 		"plant": {"allowed": ["shelf", "desk", "nightstand"], "snd": "plant"},
 		"globe": {"allowed": ["shelf", "desk"], "snd": "plastic"},
 		"headphones": {"allowed": ["desk", "nightstand"], "snd": "plastic"},
+		"poster": {"allowed": ["wall"], "snd": "paper"},
 	},
 	"boxes": [
 		{"x": 84, "y": 66, "items": ["sweater", "jeans", "tshirt", "sneakers", "bunny"]},
 		{"x": 114, "y": 98, "items": ["laptop", "pencil_cup", "headphones", "lamp", "alarm_clock"]},
-		{"x": 60, "y": 118, "items": ["book_red", "book_blue", "photo_frame", "plant", "globe"]},
+		{"x": 60, "y": 118, "items": ["book_red", "book_blue", "photo_frame", "plant", "globe", "poster"]},
 	],
 }

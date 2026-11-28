@@ -25,11 +25,13 @@ const DATA := {
 		"plant": {"allowed": ["sill", "counter"], "snd": "plant"},
 		"milk": {"allowed": ["fridge"], "snd": "paper"},
 		"cheese": {"allowed": ["fridge"], "snd": "soft"},
+		"wall_clock": {"allowed": ["wall"], "snd": "plastic"},
+		"painting_small": {"allowed": ["wall"], "snd": "wood"},
 	},
 	# x, y — мировые координаты центра коробки на полу
 	"boxes": [
 		{"x": 62, "y": 64, "items": ["plates", "bowl", "mug_yellow", "mug_blue", "glass"]},
-		{"x": 92, "y": 102, "items": ["pot", "pan", "kettle", "cutting_board", "knife_block"]},
-		{"x": 126, "y": 78, "items": ["soap", "plant", "milk", "cheese", "spices"]},
+		{"x": 92, "y": 102, "items": ["pot", "pan", "kettle", "cutting_board", "knife_block", "wall_clock"]},
+		{"x": 126, "y": 78, "items": ["soap", "plant", "milk", "cheese", "spices", "painting_small"]},
 	],
 }
