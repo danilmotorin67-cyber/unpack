@@ -109,6 +109,17 @@ def sofa_tex(x, y, z, face, k, nz):
 M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
 
 
+def floor_cushion_tex(x, y, z, face, k, nz):
+    """Стёжка крестом и пуговица на верхе подушки."""
+    if face != FACE_TOP:
+        return None
+    if math.hypot(x - 133, y - 45) < 1.1:
+        return "n"
+    if (abs(x - 133) < 0.45 or abs(y - 45) < 0.45) and abs(x - 133) < 5.5 and abs(y - 45) < 5.5:
+        return shift(k, -1)
+    return None
+
+
 def speaker_tex(x, y, z, face, k, nz):
     """Колонка: большой и малый динамики с ободками."""
     if face != FACE_RIGHT:
@@ -200,7 +211,9 @@ def prims():
     M_MAG = Mat(top="W", left="c", right="C", edge="K", hi="W")
     p.append(box(58, 52, 5, 70, 60, 6, M_MAG))
     p.append(box(59, 53, 6, 69, 59, 7, Mat(top="l", left="L", right="z", edge="Z")))
-    p.append(box(126, 38, 0, 140, 52, 4, Mat(top="g", left="G", right="h", edge="H", hi="D")))
+    # напольная подушка: пухлая, со стёжкой крестом и пуговицей в центре
+    M_FLOOR_CUSHION = Mat(top="y", left="Y", right="$", edge="$", hi="X")
+    p.append(box(125, 37, 0, 141, 53, 5.5, M_FLOOR_CUSHION, chain(puff(125, 37, 141, 53, 0, 5.5, edge=2.2), floor_cushion_tex)))
     return p
 
 
