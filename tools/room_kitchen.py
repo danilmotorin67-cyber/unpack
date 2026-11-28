@@ -16,17 +16,8 @@ def floor_tex(x, y, z, face, k, nz):
         if y < 101.5 or y > 122.5:
             return "H"
         return "G" if int((x - 52) // 4) % 2 else "h"
-    row = math.floor(y / 7)
-    seam = (y % 7) < 1
-    joint = ((x + row * 17) % 36) < 1
-    seg = math.floor((x + row * 17) / 36)
-    alt = (row * 7 + seg * 3) % 3 == 0
     lit = x > 30 and (40 + 0.3 * x) < y < (93 + 0.3 * x)
-    if seam or joint:
-        return "F" if lit else "p"
-    if lit:
-        return "f" if alt else "q"
-    return "F" if alt else "f"
+    return planks(x, y, lit)
 
 
 def wall_left_tex(x, y, z, face, k, nz):
@@ -186,9 +177,10 @@ def prims():
     p.append(box(0, 0, COUNTER_H, 108, 30, TOP_H, M_TOP, counter_r_tex))
     p.append(box(0, 30, COUNTER_H, 30, 108, TOP_H, M_TOP, counter_l_tex))
     # кран
-    p.append(cyl(3.5, 68, 1, TOP_H, 49, M_METAL))
-    p.append(box(3, 67.3, 47, 10, 68.7, 49, M_METAL))
-    p.append(box(8.6, 67.3, 45, 10, 68.7, 47, M_METAL))
+    p.append(cyl(3.5, 68, 2, TOP_H, TOP_H + 1, M_METAL))
+    p.append(cyl(3.5, 68, 1.3, TOP_H, 49, M_METAL))
+    p.append(box(3, 66.8, 47, 11, 69.2, 49.4, M_METAL))
+    p.append(box(9, 66.8, 44.5, 11, 69.2, 47, M_METAL))
     # подоконник
     p.append(box(0, 42, 48, 9, 94, 50.5, M_TOP))
     # полка и кронштейны
@@ -203,6 +195,11 @@ def prims():
     p.append(box(140, 0, 6, 142, 28, 77, M_CREAM))
     p.append(box(114, 2, 29, 140, 27, 31, M_SHELF_IN))
     p.append(box(114, 2, 53, 140, 27, 55, M_SHELF_IN))
+    # декор: розетки на фартуке, полотенце на ручке духовки
+    M_TOWEL = Mat(top="i", left="r", right="R", edge="o")
+    p.append(box(36, 0, 46, 42, 0.8, 50, M_CREAM))
+    p.append(box(92, 0, 46, 98, 0.8, 50, M_CREAM))
+    p.append(box(66, 28.6, 13, 72, 29.6, 26, M_TOWEL, lambda x, y, z, f, k, nz: "W" if f == FACE_LEFT and int(z) % 3 == 0 else None))
     return p
 
 

@@ -17,7 +17,6 @@ import room_kitchen
 import room_living
 from common import FONT_DIR, ORIGIN, RD, RH, ROOT, RW, SCRIPTS, SPRITES, from_map, render_door, render_room, save
 from glyphs import CURSORS, GLYPHS
-from handmade import HANDMADE
 from iso import PX, render_sprite
 from items import BOX_CLOSED, BOX_H, BOX_OPEN, BOX_X, BOX_Y, ITEM_SCALE, ITEMS, WALL_FOOT, WALL_ITEMS, footprint, scaled
 from palette import rgba
@@ -95,14 +94,7 @@ def main():
     ]
     for name, prims in ITEMS.items():
         prims = scaled(prims, ITEM_SCALE)
-        if name in HANDMADE:
-            # нарисован вручную: берём карту пикселей (+1px рамка для шейдера обводки)
-            rows, (ax, ay) = HANDMADE[name]
-            img = Image.new("RGBA", (len(rows[0]) + 2, len(rows) + 2), (0, 0, 0, 0))
-            img.paste(from_map(rows), (1, 1))
-            anchor = (ax + 1, ay + 1)
-        else:
-            img, anchor = render_sprite(prims)
+        img, anchor = render_sprite(prims)
         save("item_" + name, img)
         x0, y0, x1, y1, h = footprint(prims)
         if name in BODY_FOOT:
@@ -154,9 +146,10 @@ def main():
         out.append(f'\t\t"bg": "res://assets/sprites/{n}_bg.png",')
         out.append('\t\t"doors": {')
         for d in room.DOORS:
-            img, pos_c = render_door(d["closed"])
+            room_prims = room.prims()
+            img, pos_c = render_door(d["closed"], room_prims)
             save(f"{n}_{d['id']}_closed", img)
-            img, pos_o = render_door(d["open"])
+            img, pos_o = render_door(d["open"], room_prims)
             save(f"{n}_{d['id']}_open", img)
             out.append(
                 f'\t\t\t"{d["id"]}": {{"closed": "res://assets/sprites/{n}_{d["id"]}_closed.png", '

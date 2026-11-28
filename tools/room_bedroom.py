@@ -2,6 +2,7 @@
 import math
 
 from common import *  # noqa: F401,F403
+from palette import shift
 
 NAME = "bedroom"
 
@@ -117,6 +118,12 @@ def prims():
         cyl(122, 40, 4.5, 12, 15, M_LIGHT_WOOD),
         cyl(122, 40, 1.2, 0, 12, M_WOOD),
     ]
+    # декор: корзина для белья и тапочки у кровати
+    M_BASKET = Mat(top="b", left="B", right="n", edge="N", hi="U")
+    p.append(cyl(140, 44, 5, 0, 12, M_BASKET, lambda x, y, z, f, k, nz: shift(k, -1) if (z % 2) < 0.6 else None))
+    p.append(cyl(140, 44, 4.3, 12, 13.5, M_BED))
+    p.append(box(50, 92, 0, 56, 95, 1.6, M_BLANKET))
+    p.append(box(50, 97, 0, 56, 100, 1.6, M_BLANKET))
     return p
 
 

@@ -129,8 +129,8 @@ ITEMS = {
 # ---------------------------------------------------------------- ванная и спальня
 
 I_CREAM = Mat(top="W", left="c", right="k", edge="K")
-I_SPONGE = Mat(top="y", left="Y", right="n", edge="o")
-I_SILVER = Mat(top="s", left="S", right="x", edge="o", hi="W")
+I_SPONGE = Mat(top="y", left="Y", right="$", edge="o")
+I_SILVER = Mat(top="s", left="S", right="x", edge="o", hi="W", gloss=True)
 
 
 def band_tex(z0, z1, left, right):
@@ -334,7 +334,7 @@ ITEMS.update({
 })
 
 
-ITEM_SCALE = 1.5
+ITEM_SCALE = 1.7
 
 
 def scaled(prims, k):

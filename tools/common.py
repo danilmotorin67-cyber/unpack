@@ -14,7 +14,7 @@ import numpy as np
 from PIL import Image
 
 from iso import FACE_LEFT, FACE_RIGHT, FACE_TOP, Canvas, Mat, box, cyl, sphere
-from palette import ALLOWED, rgba
+from palette import ALLOWED, rgba, shift
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPRITES = os.path.join(ROOT, "game", "assets", "sprites")
 FONT_DIR = os.path.join(ROOT, "game", "assets", "font")
@@ -40,17 +40,17 @@ M_CREAM = Mat(top="c", left="C", right="k", edge="K", hi="W")
 M_CREAM_IN = Mat(top="c", left="C", right="T", edge="K", hi="W")
 M_FRIDGE_IN = Mat(top="t", left="T", right="T", edge="K")
 M_SHELF_IN = Mat(top="t", left="T", right="T", edge="S", hi="W")
-M_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W")
+M_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W", gloss=True)
 
-I_WHITE = Mat(top="W", left="c", right="C", edge="K")
-I_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W")
+I_WHITE = Mat(top="W", left="c", right="C", edge="K", gloss=True)
+I_METAL = Mat(top="s", left="S", right="x", edge="d", hi="W", gloss=True)
 I_DARK = Mat(top="m", left="d", right="o", edge="o")
-I_TERRA = Mat(top="i", left="r", right="R", edge="o")
-I_OCHRE = Mat(top="y", left="Y", right="n", edge="o")
-I_BLUE = Mat(top="l", left="L", right="z", edge="o")
+I_TERRA = Mat(top="i", left="r", right="R", edge="o", gloss=True)
+I_OCHRE = Mat(top="y", left="Y", right="$", edge="o", gloss=True)
+I_BLUE = Mat(top="l", left="L", right="z", edge="o", gloss=True)
 I_GREEN = Mat(top="a", left="e", right="E", edge="o")
-I_WOOD = Mat(top="f", left="w", right="v", edge="u", hi="q")
-I_GLASS = Mat(top="W", left="t", right="T", edge="S")
+I_WOOD = Mat(top="A", left="w", right="v", edge="u", hi="q")
+I_GLASS = Mat(top="O", left="t", right="T", edge="S", gloss=True)
 I_CARD = Mat(top="b", left="B", right="n", edge="N", hi="y")
 I_CARD_BACK = Mat(top="b", left="n", right="n", edge="N", hi="y")
 I_CARD_SIDE = Mat(top="b", left="B", right="N", edge="N", hi="y")
@@ -93,16 +93,34 @@ def shell(floor_tex, wall_l_tex, wall_r_tex, m_floor=None, m_wall_l=None, m_wall
     ]
 
 
-def planks(x, y, lit, light="q", base="f", alt_c="F", seam="p", seam_lit="F"):
-    """Доски пола вдоль оси x."""
-    row = math.floor(y / 7)
-    seg = math.floor((x + row * 17) / 36)
-    alt = (row * 7 + seg * 3) % 3 == 0
-    if (y % 7) < 1 or ((x + row * 17) % 36) < 1:
-        return seam_lit if lit else seam
-    if lit:
-        return base if alt else light
-    return alt_c if alt else base
+def _hash(*v):
+    h = 0
+    for x in v:
+        h = (h * 1103515245 + int(x) * 2654435761 + 12345) & 0x7FFFFFFF
+    return h
+
+
+def planks(x, y, lit, width=7.0, length=36.0):
+    """Доски пола вдоль оси x: у каждой доски свой тон, волокна, редкие сучки,
+    тёмные швы. lit — пятно света из окна (на ступень светлее)."""
+    row = math.floor(y / width)
+    off = (row * 17) % length
+    seg = math.floor((x + off) / length)
+    h = _hash(row, seg)
+    v = y - row * width
+    u = (x + off) % length
+    if v < 0.9 or u < 0.9:
+        k = "p"
+    else:
+        k = ("f", "f", "F", "f", "f")[h % 5]
+        # волокна: тонкие длинные полосы, у каждой доски свои
+        g = (v * 1.9 + math.sin(u * 0.21 + h % 7) * 1.3 + (h % 5)) % 3.1
+        if g < 0.28:
+            k = shift(k, -1)
+        # сучок
+        if h % 9 == 0 and (u - 9 - h % 17) ** 2 + ((v - width / 2) * 2.2) ** 2 < 1.4:
+            k = shift(k, -2)
+    return shift(k, 1) if lit else k
 
 
 def window(y, z, y0, y1, z0, z1, frame="W"):
@@ -122,29 +140,10 @@ def window(y, z, y0, y1, z0, z1, frame="W"):
     return "t" if z > zm + 1 else "T"
 
 
-# на тон темнее — для теней
-DARKER = {
-    "q": "f", "f": "F", "F": "p", "p": "P", "W": "c", "c": "C", "C": "k", "k": "K",
-    "t": "T", "T": "S", "l": "L", "L": "z", "z": "Z", "g": "G", "G": "h", "h": "H",
-    "j": "J", "J": "k", "w": "v", "v": "u", "b": "B", "B": "n", "i": "r", "r": "R",
-    "y": "Y", "a": "e", "e": "E", "s": "S", "S": "x",
-}
-
-
-def shadow_rects(prims, grow=1.5, shift=3.0):
-    """Тени от мебели, стоящей на полу: след, чуть расширенный и сдвинутый от окна (+x)."""
-    rects = []
-    for pr in prims[3:]:  # первые три — пол и стены
-        x0, y0, z0, x1, y1, z1 = pr.bounds()
-        if z0 <= 0.5 and x1 - x0 > 1.5 and y1 - y0 > 1.5:
-            rects.append((x0 - grow, y0 - grow, x1 + grow + shift, y1 + grow + shift * 0.4))
-    return rects
-
-
 def render_room(prims):
     cv = Canvas(VIEW_W, VIEW_H, ORIGIN)
     cv.add(prims)
-    cv.floor_shadow(0, shadow_rects(prims), DARKER)
+    cv.light()
     cv.finish()
     img = cv.image()
     a = np.array(img)
@@ -156,9 +155,10 @@ def render_room(prims):
     return Image.fromarray(a, "RGBA")
 
 
-def render_door(prims):
+def render_door(prims, room=()):
     cv = Canvas(VIEW_W, VIEW_H, ORIGIN)
     cv.add(prims)
+    cv.light(extra=room)
     cv.finish()
     img = cv.image()
     bb = img.getbbox()

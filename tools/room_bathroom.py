@@ -162,6 +162,11 @@ def prims():
         box(106, 0, 43, 142, 18, 45, M_LIGHT_WOOD),
         box(104, 0, 62, 144, 18, 64, M_LIGHT_WOOD),
     ]
+    # декор: корзина для мусора и ёршик у унитаза
+    p.append(cyl(97, 8, 3, 0, 7, M_METAL))
+    p.append(cyl(97, 8, 3.3, 7, 7.8, M_METAL))
+    p.append(cyl(66, 6, 1.6, 0, 3.5, M_TUB))
+    p.append(cyl(66, 6, 0.4, 3.5, 10, M_METAL))
     return p
 
 

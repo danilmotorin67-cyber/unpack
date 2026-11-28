@@ -158,6 +158,11 @@ def prims():
         box(0, 126, 2, 18, 128, 28, M_SAGE),
         box(1, 104, 14, 17, 126, 15.5, M_SAGE),
     ]
+    # декор: стопка журналов под столом, напольная подушка
+    M_MAG = Mat(top="W", left="c", right="C", edge="K", hi="W")
+    p.append(box(58, 52, 5, 70, 60, 6, M_MAG))
+    p.append(box(59, 53, 6, 69, 59, 7, Mat(top="l", left="L", right="z", edge="Z")))
+    p.append(box(126, 38, 0, 140, 52, 4, Mat(top="g", left="G", right="h", edge="H", hi="D")))
     return p
 
 

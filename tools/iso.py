@@ -15,7 +15,7 @@
 import numpy as np
 from PIL import Image
 
-from palette import PALETTE, rgba
+from palette import PALETTE, RAMP_OF, rgba, shift
 
 KEYS = list(PALETTE.keys())
 KEY_INDEX = {k: i for i, k in enumerate(KEYS)}
@@ -35,8 +35,9 @@ def project(x, y, z):
 class Mat:
     """Тона материала: hi — блик на ребре, top/left/right — грани, edge — контур."""
 
-    def __init__(self, top, left, right, edge="o", hi=None):
+    def __init__(self, top, left, right, edge="o", hi=None, gloss=False):
         self.top, self.left, self.right, self.edge, self.hi = top, left, right, edge, hi
+        self.gloss = gloss  # глянец: блик на круглых поверхностях
 
 
 class Prim:
@@ -64,6 +65,118 @@ def cyl(cx, cy, r, z0, z1, mat, tex=None):
 
 def sphere(cx, cy, cz, r, mat, tex=None, zmax=None, cap=None):
     return Prim("sph", mat, tex, cx=cx, cy=cy, cz=cz, r=r, zmax=zmax, cap=cap)
+
+
+# ------------------------------------------------------------------ свет
+
+def _norm(v):
+    v = np.array(v, dtype=float)
+    return v / np.linalg.norm(v)
+
+
+LIGHT_DIFFUSE = _norm((-0.3, 0.7, 0.9))   # для плавного освещения круглых форм
+LIGHT_SHADOW = _norm((-0.22, 0.4, 1.0))   # откуда падают тени (сверху, чуть слева)
+VIEW = _norm((1, 1, 1))
+HALF = _norm(LIGHT_DIFFUSE + VIEW)
+AO_RADIUS = 7.0
+# направления для AO: равномерно по сфере, лишние отбрасываются по нормали
+_g = (1 + 5 ** 0.5) / 2
+AO_DIRS = []
+for _i in range(24):
+    _z = 1 - (2 * _i + 1) / 24
+    _r = (1 - _z * _z) ** 0.5
+    _a = 2 * np.pi * _i / _g
+    AO_DIRS.append((_r * np.cos(_a), _r * np.sin(_a), _z))
+AO_DIRS = np.array(AO_DIRS)
+
+
+def _ray_hits(pr, O, D, tmax, eps=0.05):
+    """Попадает ли луч O + tD (t в (eps, tmax)) в примитив. O, D — (n, 3)."""
+    p = pr.p
+    ox, oy, oz = O[:, 0], O[:, 1], O[:, 2]
+    dx, dy, dz = D[:, 0], D[:, 1], D[:, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if pr.kind == "box":
+            tn = np.full(len(O), -np.inf)
+            tf = np.full(len(O), np.inf)
+            for o, d, lo, hi in ((ox, dx, p["x0"], p["x1"]), (oy, dy, p["y0"], p["y1"]), (oz, dz, p["z0"], p["z1"])):
+                inv = 1.0 / np.where(np.abs(d) < 1e-9, 1e-9, d)
+                t1 = (lo - o) * inv
+                t2 = (hi - o) * inv
+                tn = np.maximum(tn, np.minimum(t1, t2))
+                tf = np.minimum(tf, np.maximum(t1, t2))
+            return (tn <= tf) & (tf > eps) & (tn < tmax)
+        if pr.kind == "cyl":
+            ax = ox - p["cx"]
+            ay = oy - p["cy"]
+            r = p["r"]
+            a = dx * dx + dy * dy
+            b = 2 * (ax * dx + ay * dy)
+            c = ax * ax + ay * ay - r * r
+            disc = b * b - 4 * a * c
+            ok = (disc >= 0) & (a > 1e-9)
+            sq = np.sqrt(np.maximum(disc, 0))
+            hit = np.zeros(len(O), dtype=bool)
+            for t in ((-b - sq) / (2 * a), (-b + sq) / (2 * a)):
+                z = oz + t * dz
+                hit |= ok & (t > eps) & (t < tmax) & (z >= p["z0"]) & (z <= p["z1"])
+            for zc in (p["z0"], p["z1"]):
+                t = (zc - oz) / np.where(np.abs(dz) < 1e-9, 1e-9, dz)
+                xx = ax + t * dx
+                yy = ay + t * dy
+                hit |= (t > eps) & (t < tmax) & (xx * xx + yy * yy <= r * r)
+            return hit
+        cx, cy, cz = O[:, 0] - p["cx"], O[:, 1] - p["cy"], O[:, 2] - p["cz"]
+        b = cx * dx + cy * dy + cz * dz
+        c = cx * cx + cy * cy + cz * cz - p["r"] ** 2
+        disc = b * b - c
+        sq = np.sqrt(np.maximum(disc, 0))
+        hit = np.zeros(len(O), dtype=bool)
+        for t in (-b - sq, -b + sq):
+            hit |= (disc >= 0) & (t > eps) & (t < tmax)
+        return hit
+
+
+def _occluded(prims, O, D, tmax):
+    """Маска: луч упирается хоть во что-то. Примитивы далеко от точек пропускаем."""
+    out = np.zeros(len(O), dtype=bool)
+    lo = O.min(axis=0) - tmax
+    hi = O.max(axis=0) + tmax
+    for pr in prims:
+        b = pr.bounds()
+        if b[0] > hi[0] or b[3] < lo[0] or b[1] > hi[1] or b[4] < lo[1] or b[2] > hi[2] or b[5] < lo[2]:
+            continue
+        todo = ~out
+        if not todo.any():
+            break
+        out[todo] |= _ray_hits(pr, O[todo], D[todo], tmax)
+    return out
+
+
+def _curved_keys(mat, nx, ny, nz):
+    """Плавный тон по нормали вдоль рампы материала (вместо трёх полос)."""
+    if mat.left not in RAMP_OF:
+        return None
+    ramp, il = RAMP_OF[mat.left]
+    rt = RAMP_OF.get(mat.top)
+    rr = RAMP_OF.get(mat.right)
+    if rt is None or rr is None or rt[0] is not ramp or rr[0] is not ramp:
+        return None
+    it, ir = rt[1], rr[1]
+    L = LIGHT_DIFFUSE
+    dT, dL, dR = L[2], L[1], L[0]
+    d = nx * L[0] + ny * L[1] + nz * L[2]
+    up = il + (d - dL) / (dT - dL) * (it - il)
+    down = ir + (d - dR) / (dL - dR) * (il - ir)
+    idx = np.where(d >= dL, up, down)
+    idx = np.clip(np.round(idx), max(ir - 1, 0), min(it + 1, len(ramp) - 1)).astype(int)
+    if mat.gloss:
+        spec = (nx * HALF[0] + ny * HALF[1] + nz * HALF[2]) > 0.93
+        idx = np.where(spec, len(ramp) - 1, idx)
+    out = np.empty(nx.shape, dtype=object)
+    for i, k in enumerate(ramp):
+        out[idx == i] = k
+    return out
 
 
 # ------------------------------------------------------------------ trace
@@ -153,6 +266,8 @@ class Canvas:
         self.key = np.full((h, w), -1, dtype=int)
         self.pid = np.full((h, w), -1, dtype=int)
         self.face = np.full((h, w), -1, dtype=int)
+        self.pos = np.zeros((h, w, 3))
+        self.nrm = np.zeros((h, w, 3))
         self.prims = []
 
     def add(self, prims):
@@ -188,6 +303,10 @@ class Canvas:
         if not win.any():
             return
         keys, face = _shade(pr.mat, nx, ny, nz, pr.kind != "box")
+        if pr.kind != "box":
+            smooth = _curved_keys(pr.mat, nx, ny, np.where(nz > 1.5, 1.0, nz))
+            if smooth is not None:
+                keys = np.where(nz > 1.5, keys, smooth)
         if pr.tex is not None:
             X = rx + t
             Y = ry + t
@@ -202,24 +321,48 @@ class Canvas:
         self.key[sl] = np.where(win, kidx, self.key[sl])
         self.pid[sl] = np.where(win, pid, self.pid[sl])
         self.face[sl] = np.where(win, face, self.face[sl])
+        P = np.stack([rx + t, ry + t, t], axis=-1)
+        N = np.stack([nx, ny, np.where(nz > 1.5, 1.0, nz)], axis=-1)
+        self.pos[sl] = np.where(win[..., None], P, self.pos[sl])
+        self.nrm[sl] = np.where(win[..., None], N, self.nrm[sl])
 
     # -------------------------------------------------------------- post
 
-    def floor_shadow(self, floor_pid, rects, darker, wall_ao=2.5):
-        """Тени на полу: под мебелью (прямоугольники x0,y0,x1,y1 в мире) и
-        мягкое затемнение у основания стен. darker — карта «тон -> темнее»."""
-        ys, xs = np.nonzero((self.pid == floor_pid) & (self.face == FACE_TOP))
-        sx = (xs + 0.5 - self.ox) / PX
-        sy = (ys + 0.5 - self.oy) / PX
-        wx = sy + sx / 2
-        wy = sy - sx / 2
-        hit = (wx < wall_ao) | (wy < wall_ao)
-        for x0, y0, x1, y1 in rects:
-            hit |= (wx >= x0) & (wx <= x1) & (wy >= y0) & (wy <= y1)
-        for y, x in zip(ys[hit], xs[hit]):
-            k = KEYS[self.key[y, x]]
-            if k in darker:
-                self.key[y, x] = KEY_INDEX[darker[k]]
+    def light(self, ao=True, shadows=True, extra=()):
+        """Тени и AO: сдвигают тон пикселя вниз по его рампе.
+        extra — дополнительные примитивы, которые отбрасывают тень, но не рисуются."""
+        ys, xs = np.nonzero(self.pid >= 0)
+        if len(ys) == 0:
+            return self
+        P = self.pos[ys, xs]
+        N = self.nrm[ys, xs]
+        O = P + N * 0.08
+        prims = list(self.prims) + list(extra)
+        dark = np.zeros(len(ys), dtype=int)
+        if shadows:
+            Ls = np.broadcast_to(LIGHT_SHADOW, P.shape)
+            facing = (N @ LIGHT_SHADOW) > 0.05
+            sh = np.zeros(len(ys), dtype=bool)
+            sh[facing] = _occluded(prims, O[facing], Ls[facing], 120.0)
+            dark += sh.astype(int)
+        if ao:
+            hits = np.zeros(len(ys))
+            count = np.zeros(len(ys))
+            for d in AO_DIRS:
+                cosn = N @ d
+                use = cosn > 0.15
+                if not use.any():
+                    continue
+                D = np.broadcast_to(d, P.shape)
+                h = _occluded(prims, O[use], D[use], AO_RADIUS)
+                hits[use] += h * cosn[use]
+                count[use] += cosn[use]
+            occ = hits / np.maximum(count, 1e-6)
+            dark += (occ > 0.28).astype(int) + (occ > 0.55).astype(int)
+        dark = np.minimum(dark, 2)
+        for y, x, n in zip(ys[dark > 0], xs[dark > 0], dark[dark > 0]):
+            self.key[y, x] = KEY_INDEX[shift(KEYS[self.key[y, x]], -int(n))]
+        return self
 
     def finish(self, edges=True, creases=True, edge_t=4.0):
         key = self.key.copy()
@@ -234,9 +377,8 @@ class Canvas:
             below_face[:-1] = face[1:]
             mask = filled & (face == FACE_TOP) & (below_pid == pid) & (below_face != FACE_TOP)
             for y, x in zip(*np.nonzero(mask)):
-                hi = self.prims[pid[y, x]].mat.hi
-                if hi:
-                    key[y, x] = KEY_INDEX[hi]
+                if self.prims[pid[y, x]].mat.hi:
+                    key[y, x] = KEY_INDEX[shift(KEYS[self.key[y, x]], 1)]
         if edges:
             far = np.zeros_like(filled)
             for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
@@ -249,9 +391,8 @@ class Canvas:
                 far |= nd < d - edge_t
             mask = filled & far
             for y, x in zip(*np.nonzero(mask)):
-                e = self.prims[pid[y, x]].mat.edge
-                if e:
-                    key[y, x] = KEY_INDEX[e]
+                if self.prims[pid[y, x]].mat.edge:
+                    key[y, x] = KEY_INDEX[shift(KEYS[self.key[y, x]], -2)]
         self.final = key
         return self
 
@@ -267,19 +408,38 @@ def render_sprite(prims, outline="o", size=160):
     Возвращает (image, anchor) — anchor = пиксель проекции точки (0,0,0)."""
     cv = Canvas(size, size, (size // 2, size // 2 + size // 4))
     cv.add(prims)
+    cv.light(shadows=False)
     cv.finish()
     img = cv.image()
     a = np.array(img)
     alpha = a[..., 3] > 0
     if outline:
-        grown = alpha.copy()
-        grown[1:] |= alpha[:-1]
-        grown[:-1] |= alpha[1:]
-        grown[:, 1:] |= alpha[:, :-1]
-        grown[:, :-1] |= alpha[:, 1:]
-        ring = grown & ~alpha
-        a[ring] = rgba(outline)
-        alpha = grown
+        # цветной контур: самый тёмный тон рампы соседнего пикселя
+        # (снизу и справа — ещё и тёмный общий контур, чтобы вещь «стояла»)
+        fin = cv.final
+        H, W = alpha.shape
+        ring = np.zeros_like(alpha)
+        src = np.full(alpha.shape, -1)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            sh = np.full(alpha.shape, -1)
+            ys = slice(max(dy, 0), H + min(dy, 0))
+            yd = slice(max(-dy, 0), H + min(-dy, 0))
+            xs = slice(max(dx, 0), W + min(dx, 0))
+            xd = slice(max(-dx, 0), W + min(-dx, 0))
+            sh[yd, xd] = fin[ys, xs]
+            take = (~alpha) & (sh >= 0) & (src < 0)
+            src[take] = sh[take]
+            ring |= take
+        below = np.zeros_like(alpha)
+        below[:-1] = alpha[1:]
+        left = np.zeros_like(alpha)
+        left[:, 1:] = alpha[:, :-1]
+        for y, x in zip(*np.nonzero(ring)):
+            k = KEYS[src[y, x]]
+            ramp, _ = RAMP_OF[k]
+            # сверху-слева — тёмный тон материала, снизу-справа — общий тёмный контур
+            a[y, x] = rgba(ramp[0]) if (below[y, x] and not left[y, x]) else rgba(outline)
+        alpha = alpha | ring
     ys, xs = np.nonzero(alpha)
     x0, x1, y0, y1 = xs.min() - 1, xs.max() + 2, ys.min() - 1, ys.max() + 2  # +1px рамка для шейдера
     crop = Image.fromarray(a, "RGBA").crop((x0, y0, x1, y1))
