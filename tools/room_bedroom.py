@@ -83,16 +83,22 @@ def wardrobe_inner_tex(x, y, z, face, k, nz):
     return None
 
 
+M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
+
+
 def prims():
     p = shell(floor_tex, wall_left_tex, wall_right_tex)
     # кровать
     p += [
         box(0, 32, 0, 4, 102, 34, M_WOOD),
         box(4, 34, 0, 46, 100, 12, M_WOOD),
-        box(4, 36, 12, 46, 98, 19, M_BED),
-        box(18, 35, 19, 47, 99, 21, M_BLANKET, blanket_tex),
-        box(5, 40, 19, 15, 62, 23, M_BED),
-        box(5, 68, 19, 15, 90, 23, M_BED),
+        box(4, 36, 12, 46, 98, 19, M_BED, puff(4, 36, 46, 98, 12, 19, edge=1.2)),
+        box(18, 35, 19, 47, 99, 21, M_BLANKET, chain(blanket_tex, wrinkles(1.0))),
+        # край пледа свисает со стороны комнаты и в ногах
+        box(47, 35, 11, 48.2, 99, 21, M_BLANKET, folds(1.1, 1, 0.0, faces=(FACE_RIGHT,))),
+        box(18, 99, 11, 48.2, 100.2, 21, M_BLANKET, folds(1.1, 1, 0.7, faces=(FACE_LEFT,))),
+        box(5, 40, 19, 15, 62, 23.5, M_BED, puff(5, 40, 15, 62, 19, 23.5, edge=2.2)),
+        box(5, 68, 19, 15, 90, 23.5, M_BED, puff(5, 68, 15, 90, 19, 23.5, edge=2.2)),
     ]
     # тумбочка
     p.append(box(0, 104, 0, 18, 122, 22, M_LIGHT_WOOD, drawer_tex))
@@ -122,8 +128,18 @@ def prims():
     M_BASKET = Mat(top="b", left="B", right="n", edge="N", hi="U")
     p.append(cyl(140, 44, 5, 0, 12, M_BASKET, lambda x, y, z, f, k, nz: shift(k, -1) if (z % 2) < 0.6 else None))
     p.append(cyl(140, 44, 4.3, 12, 13.5, M_BED))
-    p.append(box(50, 92, 0, 56, 95, 1.6, M_BLANKET))
-    p.append(box(50, 97, 0, 56, 100, 1.6, M_BLANKET))
+    M_SLIPPER = Mat(top="V", left="i", right="r", edge="R")
+    p.append(box(50, 92, 0, 56, 95, 1.8, M_SLIPPER, puff(50, 92, 56, 95, edge=0.8)))
+    p.append(box(50, 97, 0, 56, 100, 1.8, M_SLIPPER, puff(50, 97, 56, 100, edge=0.8)))
+    # шторы, гирлянда над столом, рюкзак у стола
+    p += curtain(44, 90, 48, 76, M_CURTAIN)
+    for i in range(13):
+        gx = 104 + i * 3.4
+        gz = 78 - 3.2 * math.sin(math.pi * i / 12)
+        p.append(sphere(gx, 1.2, gz, 0.75, Mat(top="X", left="y", right="Y", edge="$") if i % 2 else Mat(top="V", left="i", right="r", edge="R")))
+    M_BAG = Mat(top="l", left="L", right="z", edge="Z")
+    p.append(box(98, 30, 0, 106, 36, 10, M_BAG, puff(98, 30, 106, 36, 0, 10, edge=1.6)))
+    p.append(box(99.5, 35.5, 2, 104.5, 37, 6, M_BAG))
     return p
 
 
@@ -140,7 +156,7 @@ DOORS = [
 WARDROBE = {"x0": 60, "y0": 1, "x1": 96, "y1": 23, "container": "wardrobe"}
 ZONES = [
     {"id": "wall_r", "tag": "wall", "wall": "R", "u0": 4, "u1": 55, "z0": 36, "z1": 82},
-    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -128, "u1": -96, "z0": 34, "z1": 82},
+    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -128, "u1": -99, "z0": 34, "z1": 82},
     {"id": "bed", "tag": "bed", "x0": 18, "y0": 37, "x1": 46, "y1": 97, "z": 21, "max_h": 40},
     {"id": "nightstand", "tag": "nightstand", "x0": 0, "y0": 104, "x1": 18, "y1": 122, "z": 22, "max_h": 40},
     {"id": "wardrobe_0", "tag": "wardrobe", **WARDROBE, "z": 4, "max_h": 24},

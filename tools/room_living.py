@@ -2,6 +2,7 @@
 import math
 
 from common import *  # noqa: F401,F403
+from palette import shift
 
 NAME = "living"
 
@@ -37,6 +38,11 @@ def wall_left_tex(x, y, z, face, k, nz):
     w = window(y, z, *WIN)
     if w:
         return w
+    # розетка и провод от телевизора
+    if 12.5 <= y <= 17.5 and 8 <= z <= 12:
+        return "W" if not (13.5 < y < 16.5 and 9 < z < 11) else "k"
+    if 17.2 <= y <= 18 and 3 <= z <= 10.5 or 18 <= y <= 20 and 3 <= z <= 3.8:
+        return "d"
     if z < 3:
         return "k"
     if abs(z - 30) < 0.6:
@@ -100,6 +106,9 @@ def sofa_tex(x, y, z, face, k, nz):
     return None
 
 
+M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
+
+
 def prims():
     p = shell(floor_tex, wall_left_tex, wall_right_tex)
     # большое растение в углу
@@ -119,10 +128,17 @@ def prims():
     # диван вдоль правой стены
     p += [
         box(30, 0, 0, 90, 24, 10, M_SOFA, sofa_tex),
-        box(36, 6, 10, 84, 24, 16, M_SOFA, sofa_tex),
-        box(30, 0, 10, 90, 6, 30, M_SOFA),
-        box(30, 6, 10, 36, 24, 22, M_SOFA),
-        box(84, 6, 10, 90, 24, 22, M_SOFA),
+        box(36, 6, 10, 60, 24, 16, M_SOFA, puff(36, 6, 60, 24, 10, 16, edge=1.8)),
+        box(60, 6, 10, 84, 24, 16, M_SOFA, puff(60, 6, 84, 24, 10, 16, edge=1.8)),
+        box(30, 0, 10, 90, 4, 30, M_SOFA, puff(30, 0, 90, 4, edge=1.2)),
+        box(36, 4, 16, 60, 8, 28, M_SOFA, puff(36, 4, 60, 8, 16, 28, edge=1.2)),
+        box(60, 4, 16, 84, 8, 28, M_SOFA, puff(60, 4, 84, 8, 16, 28, edge=1.2)),
+        box(30, 4, 10, 36, 24, 22, M_SOFA, puff(30, 4, 36, 24, 10, 22, edge=1.6)),
+        box(84, 4, 10, 90, 24, 22, M_SOFA, puff(84, 4, 90, 24, 10, 22, edge=1.6)),
+        # плед, перекинутый через подлокотник
+        box(83.6, 9, 22, 90.4, 19, 23, Mat(top="X", left="y", right="Y", edge="$"), wrinkles(2.0)),
+        box(83.6, 19, 13, 90.4, 20, 23, Mat(top="X", left="y", right="Y", edge="$"), folds(1.5, 1, 0.5, faces=(FACE_LEFT,))),
+        box(90.4, 9, 13, 91.4, 20, 23, Mat(top="X", left="y", right="Y", edge="$"), folds(1.5, 1, 1.5, faces=(FACE_RIGHT,))),
     ]
     # торшер
     p += [
@@ -158,6 +174,11 @@ def prims():
         box(0, 126, 2, 18, 128, 28, M_SAGE),
         box(1, 104, 14, 17, 126, 15.5, M_SAGE),
     ]
+    # шторы, колонка у телевизора, пуф
+    p += curtain(62, 98, 44, 76, M_CURTAIN)
+    p.append(box(3, 58, 0, 10, 64, 15, M_TV, lambda x, y, z, f, k, nz: "m" if f == FACE_RIGHT and (y - 61) ** 2 + (z - 9) ** 2 < 4 else ("m" if f == FACE_RIGHT and (y - 61) ** 2 + (z - 3.5) ** 2 < 1.5 else None)))
+    p.append(cyl(118, 66, 6, 0, 9, Mat(top="g", left="G", right="h", edge="H", hi="D"),
+                 lambda x, y, z, f, k, nz: shift(k, -1) if (f == FACE_TOP and math.hypot(x - 118, y - 66) > 4.6) or (f != FACE_TOP and z < 2) else None))
     # декор: стопка журналов под столом, напольная подушка
     M_MAG = Mat(top="W", left="c", right="C", edge="K", hi="W")
     p.append(box(58, 52, 5, 70, 60, 6, M_MAG))
@@ -179,8 +200,8 @@ DOORS = [
 SIDEBOARD = {"x0": 1, "y0": 104, "x1": 17, "y1": 126, "container": "sideboard"}
 BOOKSHELF = {"x0": 102, "y0": 1, "x1": 138, "y1": 16}
 ZONES = [
-    {"id": "wall_l1", "tag": "wall", "wall": "L", "u0": -58, "u1": -20, "z0": 44, "z1": 82},
-    {"id": "wall_l2", "tag": "wall", "wall": "L", "u0": -128, "u1": -102, "z0": 36, "z1": 82},
+    {"id": "wall_l1", "tag": "wall", "wall": "L", "u0": -54, "u1": -20, "z0": 44, "z1": 82},
+    {"id": "wall_l2", "tag": "wall", "wall": "L", "u0": -128, "u1": -106, "z0": 36, "z1": 82},
     {"id": "wall_r", "tag": "wall", "wall": "R", "u0": 30, "u1": 88, "z0": 34, "z1": 82},
     {"id": "sofa", "tag": "sofa", "x0": 36, "y0": 6, "x1": 84, "y1": 24, "z": 16, "max_h": 30},
     {"id": "table", "tag": "table", "x0": 50, "y0": 44, "x1": 84, "y1": 70, "z": 14, "max_h": 40},

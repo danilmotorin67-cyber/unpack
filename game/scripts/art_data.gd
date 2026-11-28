@@ -86,7 +86,7 @@ const ROOMS := {
 			"fridge": {"closed": "res://assets/sprites/kitchen_fridge_closed.png", "open": "res://assets/sprites/kitchen_fridge_open.png", "closed_pos": Vector2(413, 130), "open_pos": Vector2(372, 130), "closed_depth": 173, "open_depth": 171},
 		},
 		"zones": [
-			{"id": "wall_l", "tag": "wall", "wall": "L", "u0": -40, "u1": -6, "z0": 50, "z1": 82},
+			{"id": "wall_l", "tag": "wall", "wall": "L", "u0": -36, "u1": -6, "z0": 50, "z1": 82},
 			{"id": "wall_r", "tag": "wall", "wall": "R", "u0": 2, "u1": 24, "z0": 63, "z1": 82},
 			{"id": "sill", "tag": "sill", "x0": 0, "y0": 43, "x1": 9, "y1": 93, "z": 50.5, "max_h": 30},
 			{"id": "shelf", "tag": "shelf", "x0": 25, "y0": 0, "x1": 100, "y1": 15, "z": 73, "max_h": 12},
@@ -106,7 +106,7 @@ const ROOMS := {
 			"mirror": {"closed": "res://assets/sprites/bathroom_mirror_closed.png", "open": "res://assets/sprites/bathroom_mirror_open.png", "closed_pos": Vector2(322, 63), "open_pos": Vector2(272, 63), "closed_depth": 67.5, "open_depth": 67.5},
 		},
 		"zones": [
-			{"id": "bath", "tag": "bath", "x0": 3, "y0": 69, "x1": 27, "y1": 125, "z": 4, "max_h": 30},
+			{"id": "bath", "tag": "bath", "x0": 3, "y0": 69, "x1": 27, "y1": 102, "z": 4, "max_h": 30},
 			{"id": "sink", "tag": "sink", "x0": 17, "y0": 0, "x1": 63, "y1": 26, "z": 33, "max_h": 14},
 			{"id": "mirror_0", "tag": "mirror", "x0": 24, "y0": 1, "x1": 56, "y1": 7.5, "z": 50, "max_h": 9.5, "container": "mirror"},
 			{"id": "mirror_1", "tag": "mirror", "x0": 24, "y0": 1, "x1": 56, "y1": 7.5, "z": 61.5, "max_h": 10, "container": "mirror"},
@@ -124,7 +124,7 @@ const ROOMS := {
 		},
 		"zones": [
 			{"id": "wall_r", "tag": "wall", "wall": "R", "u0": 4, "u1": 55, "z0": 36, "z1": 82},
-			{"id": "wall_l", "tag": "wall", "wall": "L", "u0": -128, "u1": -96, "z0": 34, "z1": 82},
+			{"id": "wall_l", "tag": "wall", "wall": "L", "u0": -128, "u1": -99, "z0": 34, "z1": 82},
 			{"id": "bed", "tag": "bed", "x0": 18, "y0": 37, "x1": 46, "y1": 97, "z": 21, "max_h": 40},
 			{"id": "nightstand", "tag": "nightstand", "x0": 0, "y0": 104, "x1": 18, "y1": 122, "z": 22, "max_h": 40},
 			{"id": "wardrobe_0", "tag": "wardrobe", "x0": 60, "y0": 1, "x1": 96, "y1": 23, "container": "wardrobe", "z": 4, "max_h": 24},
@@ -140,8 +140,8 @@ const ROOMS := {
 			"sideboard": {"closed": "res://assets/sprites/living_sideboard_closed.png", "open": "res://assets/sprites/living_sideboard_open.png", "closed_pos": Vector2(158, 183), "open_pos": Vector2(195, 183), "closed_depth": 147.5, "open_depth": 145.5},
 		},
 		"zones": [
-			{"id": "wall_l1", "tag": "wall", "wall": "L", "u0": -58, "u1": -20, "z0": 44, "z1": 82},
-			{"id": "wall_l2", "tag": "wall", "wall": "L", "u0": -128, "u1": -102, "z0": 36, "z1": 82},
+			{"id": "wall_l1", "tag": "wall", "wall": "L", "u0": -54, "u1": -20, "z0": 44, "z1": 82},
+			{"id": "wall_l2", "tag": "wall", "wall": "L", "u0": -128, "u1": -106, "z0": 36, "z1": 82},
 			{"id": "wall_r", "tag": "wall", "wall": "R", "u0": 30, "u1": 88, "z0": 34, "z1": 82},
 			{"id": "sofa", "tag": "sofa", "x0": 36, "y0": 6, "x1": 84, "y1": 24, "z": 16, "max_h": 30},
 			{"id": "table", "tag": "table", "x0": 50, "y0": 44, "x1": 84, "y1": 70, "z": 14, "max_h": 40},

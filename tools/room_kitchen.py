@@ -2,6 +2,7 @@
 import math
 
 from common import *  # noqa: F401,F403
+from palette import shift
 
 NAME = "kitchen"
 
@@ -167,6 +168,9 @@ def fridge_door_inner_tex(x, y, z, face, k, nz):
     return None
 
 
+M_CURTAIN = Mat(top="V", left="i", right="i", edge="r")
+
+
 def prims():
     p = shell(floor_tex, wall_left_tex, wall_right_tex)
     # шкафы
@@ -195,6 +199,20 @@ def prims():
     p.append(box(140, 0, 6, 142, 28, 77, M_CREAM))
     p.append(box(114, 2, 29, 140, 27, 31, M_SHELF_IN))
     p.append(box(114, 2, 53, 140, 27, 55, M_SHELF_IN))
+    # шторы на окне
+    p += curtain(44, 92, 50, 80, M_CURTAIN)
+    # рейлинг под полкой: половник, лопатка, венчик
+    p.append(box(32, 0.4, 61.5, 92, 1.4, 62.5, M_METAL))
+    p.append(box(40, 0.8, 52, 40.8, 1.8, 61.5, M_METAL))
+    p.append(cyl(40.4, 2.6, 1.6, 50.5, 52.2, M_METAL))
+    p.append(box(52, 0.8, 50, 52.8, 1.8, 61.5, M_WOOD))
+    p.append(box(50.8, 0.8, 47, 54, 2.2, 50.5, M_WOOD))
+    p.append(box(64, 0.8, 54, 64.8, 1.8, 61.5, M_METAL))
+    p.append(sphere(64.4, 1.8, 52.5, 1.6, M_METAL))
+    # мусорное ведро и выключатель
+    p.append(cyl(38, 38, 4.2, 0, 13, M_CREAM))
+    p.append(cyl(38, 38, 4.5, 13, 14.4, M_METAL))
+    p.append(box(104, 0, 50, 107, 0.6, 55, M_CREAM))
     # декор: розетки на фартуке, полотенце на ручке духовки
     M_TOWEL = Mat(top="i", left="r", right="R", edge="o")
     p.append(box(36, 0, 46, 42, 0.8, 50, M_CREAM))
@@ -215,7 +233,7 @@ DOORS = [
 
 ZONES = [
     # на стенах: левая — u вдоль стены (u = -y), правая — u = x
-    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -40, "u1": -6, "z0": 50, "z1": 82},
+    {"id": "wall_l", "tag": "wall", "wall": "L", "u0": -36, "u1": -6, "z0": 50, "z1": 82},
     {"id": "wall_r", "tag": "wall", "wall": "R", "u0": 2, "u1": 24, "z0": 63, "z1": 82},
     {"id": "sill", "tag": "sill", "x0": 0, "y0": 43, "x1": 9, "y1": 93, "z": 50.5, "max_h": 30},
     {"id": "shelf", "tag": "shelf", "x0": 25, "y0": 0, "x1": 100, "y1": 15, "z": 73, "max_h": 12},

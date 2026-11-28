@@ -164,3 +164,90 @@ def render_door(prims, room=()):
     bb = img.getbbox()
     x0, y0, x1, y1 = bb[0] - 1, bb[1] - 1, bb[2] + 1, bb[3] + 1
     return img.crop((x0, y0, x1, y1)), (x0, y0)
+
+
+# ---------------------------------------------------------------- ткани
+# Текстуры-модификаторы: получают уже затонированный ключ k и сдвигают его
+# по рампе (shift). Их можно соединять через chain().
+
+def chain(*texs):
+    """Применяет текстуры по очереди: каждая получает результат предыдущей."""
+    def tex(x, y, z, face, k, nz):
+        for t in texs:
+            if t is None:
+                continue
+            r = t(x, y, z, face, k, nz)
+            if r is not None:
+                k = r
+        return k
+    return tex
+
+
+def folds(freq=0.9, strength=1, phase=0.0, faces=(FACE_LEFT, FACE_RIGHT)):
+    """Вертикальные складки свисающей ткани: гребни светлее, впадины темнее."""
+    def tex(x, y, z, face, k, nz):
+        if face not in faces:
+            return None
+        u = x if face == FACE_LEFT else y
+        s = math.sin(u * freq + phase + 0.7 * math.sin(z * 0.3 + u * 0.2))
+        if s > 0.72:
+            return shift(k, strength)
+        if s < -0.5:
+            return shift(k, -strength)
+        return None
+    return tex
+
+
+def puff(x0, y0, x1, y1, z0=None, z1=None, edge=1.4):
+    """Пухлая ткань (подушки, диванные подушки, матрас): края верхней грани
+    темнее, ближе к свету — блик, низ боковых граней в тени."""
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    hw, hh = (x1 - x0) / 2, (y1 - y0) / 2
+
+    def tex(x, y, z, face, k, nz):
+        if face == FACE_TOP:
+            d = min(x - x0, x1 - x, y - y0, y1 - y)
+            if d < edge * 0.55:
+                return shift(k, -1)
+            if ((x - cx + hw * 0.25) / hw) ** 2 + ((y - cy - hh * 0.2) / hh) ** 2 < 0.22:
+                return shift(k, 1)
+            return None
+        if z0 is not None and z1 is not None and z < z0 + (z1 - z0) * 0.35:
+            return shift(k, -1)
+        return None
+    return tex
+
+
+def wrinkles(scale=1.0, faces=(FACE_TOP,)):
+    """Редкие заломы на лежащей ткани."""
+    def tex(x, y, z, face, k, nz):
+        if face not in faces:
+            return None
+        s = math.sin((x * 0.45 + y * 0.28) * scale + 2.2 * math.sin(y * 0.17 * scale))
+        if s > 0.94:
+            return shift(k, 1)
+        if s < -0.95:
+            return shift(k, -1)
+        return None
+    return tex
+
+
+def weave(step=1.6):
+    """Мелкое плетение: шахматка сдвигов в половину тона на ковре/полотенце."""
+    def tex(x, y, z, face, k, nz):
+        if face == FACE_TOP and (int(x / step) + int(y / step)) % 2 == 0 and (int(x * 2.3) % 3 == 0):
+            return shift(k, -1)
+        return None
+    return tex
+
+
+def curtain(y0, y1, z0, z1, mat, gap=None, d=1.6):
+    """Шторы на левой стене: две полотнища по краям окна y0..y1, карниз сверху.
+    Возвращает список примитивов."""
+    w = 7
+    out = [
+        box(0, y0 - w - 2, z1 + 2, 2.2, y1 + w + 2, z1 + 3.2, M_WOOD),
+        box(0, y0 - w, z0 - 6, d, y0 + 1, z1 + 2, mat, folds(1.4, 1, 0.3, faces=(FACE_RIGHT,))),
+        box(0, y1 - 1, z0 - 6, d, y1 + w, z1 + 2, mat, folds(1.4, 1, 1.9, faces=(FACE_RIGHT,))),
+    ]
+    return out

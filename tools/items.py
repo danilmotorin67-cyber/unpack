@@ -254,8 +254,8 @@ ITEMS.update({
         box(-2, -1.3, 0, 2, 1.3, 1.6, I_SPONGE, sponge_tex),
         box(-2, -1.3, 1.6, 2, 1.3, 2.1, I_GREEN),
     ],
-    "towel_blue": [box(-3.5, -2.5, 0, 3.5, 2.5, 2.4, I_BLUE, fold_tex("z"))],
-    "towel_white": [box(-3.5, -2.5, 0, 3.5, 2.5, 2.4, I_CREAM, fold_tex("k"))],
+    "towel_blue": [box(-3.5, -2.5, 0, 3.5, 2.5, 2.4, I_BLUE, chain(fold_tex("z"), puff(-3.5, -2.5, 3.5, 2.5, 0, 2.4, edge=1.2)))],
+    "towel_white": [box(-3.5, -2.5, 0, 3.5, 2.5, 2.4, I_CREAM, chain(fold_tex("k"), puff(-3.5, -2.5, 3.5, 2.5, 0, 2.4, edge=1.2)))],
     "toilet_paper": [cyl(0, 0, 1.7, 0, 3, I_CREAM, cup_top(0.6, "k"))],
     "perfume": [
         box(-1, -0.6, 0, 1, 0.6, 3, I_GLASS),
@@ -306,9 +306,9 @@ ITEMS.update({
         box(0.1, 0, 3, 0.5, 0.4, 4.6, I_BLUE),
         box(-0.2, 0.3, 3, 0.2, 0.7, 4.3, I_GREEN),
     ],
-    "sweater": [box(-3, -2.5, 0, 3, 2.5, 1.8, I_TERRA, knit_tex)],
-    "jeans": [box(-3, -2.5, 0, 3, 2.5, 1.4, I_BLUE, fold_tex("z"))],
-    "tshirt": [box(-3, -2.5, 0, 3, 2.5, 1, I_CREAM, tshirt_tex)],
+    "sweater": [box(-3, -2.5, 0, 3, 2.5, 1.8, I_TERRA, chain(knit_tex, puff(-3, -2.5, 3, 2.5, 0, 1.8, edge=1.0)))],
+    "jeans": [box(-3, -2.5, 0, 3, 2.5, 1.4, I_BLUE, chain(fold_tex("z"), puff(-3, -2.5, 3, 2.5, 0, 1.4, edge=1.0), wrinkles(2.5)))],
+    "tshirt": [box(-3, -2.5, 0, 3, 2.5, 1, I_CREAM, chain(tshirt_tex, puff(-3, -2.5, 3, 2.5, 0, 1, edge=1.0), wrinkles(2.5)))],
     "sneakers": [
         box(-3, -2.2, 0, 2.5, -0.4, 1.5, I_CREAM, band_tex(-1, 0.4, "k", "K")),
         box(-3, 0.4, 0, 2.5, 2.2, 1.5, I_CREAM, band_tex(-1, 0.4, "k", "K")),
@@ -518,7 +518,7 @@ WALL_FOOT = {
 
 def cushion_tex(edge):
     def tex(x, y, z, face, k, nz):
-        if face == FACE_TOP and (abs(x) > 2.4 or abs(y) > 2.4):
+        if face == FACE_TOP and (abs(x) > 2.75 or abs(y) > 2.75):
             return edge
         if face == FACE_TOP and math.hypot(x, y) < 0.5:
             return edge
@@ -584,9 +584,9 @@ def books_row():
 
 
 ITEMS.update({
-    "cushion_terra": [box(-3, -3, 0, 3, 3, 2.2, I_TERRA, cushion_tex("R"))],
-    "cushion_blue": [box(-3, -3, 0, 3, 3, 2.2, I_BLUE, cushion_tex("z"))],
-    "throw_blanket": [box(-4, -2.5, 0, 4, 2.5, 1.8, I_OCHRE, stripes_tex)],
+    "cushion_terra": [box(-3, -3, 0, 3, 3, 2.2, I_TERRA, chain(puff(-3, -3, 3, 3, 0, 2.2, edge=1.6), cushion_tex("R")))],
+    "cushion_blue": [box(-3, -3, 0, 3, 3, 2.2, I_BLUE, chain(puff(-3, -3, 3, 3, 0, 2.2, edge=1.6), cushion_tex("z")))],
+    "throw_blanket": [box(-4, -2.5, 0, 4, 2.5, 1.8, I_OCHRE, chain(stripes_tex, puff(-4, -2.5, 4, 2.5, 0, 1.8, edge=1.0)))],
     "teapot": [
         sphere(0, 0, 2.2, 2.3, I_WHITE, teapot_tex),
         cyl(0, 0, 1.4, 0, 0.6, I_WHITE),

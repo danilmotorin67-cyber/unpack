@@ -2,6 +2,7 @@
 import math
 
 from common import *  # noqa: F401,F403
+from palette import shift
 
 NAME = "bathroom"
 
@@ -162,6 +163,17 @@ def prims():
         box(106, 0, 43, 142, 18, 45, M_LIGHT_WOOD),
         box(104, 0, 62, 144, 18, 64, M_LIGHT_WOOD),
     ]
+    # шторка у ванны (сдвинута к дальнему краю), карниз
+    M_SHOWER = Mat(top="O", left="t", right="t", edge="T")
+    p.append(box(27, 66, 72, 28.2, 128, 73.2, M_METAL))
+    p.append(box(26.4, 104, 24, 28.8, 128, 72, M_SHOWER, folds(1.6, 1, 0.2, faces=(FACE_RIGHT,))))
+    # полотенце на крючке у ванны (левая стена)
+    M_TOWEL = Mat(top="l", left="L", right="L", edge="z")
+    p.append(box(0, 32, 45, 2.2, 48, 46, M_METAL))
+    p.append(box(0.3, 34, 28, 1.8, 46, 45, M_TOWEL, chain(folds(1.3, 1, 0.8, faces=(FACE_RIGHT,)),
+             lambda x, y, z, f, k, nz: "W" if f == FACE_RIGHT and 30.5 < z < 31.6 else None)))
+    # весы на полу
+    p.append(box(56, 104, 0, 66, 113, 1.3, M_TUB, lambda x, y, z, f, k, nz: "z" if f == FACE_TOP and 59 < x < 63 and 105.5 < y < 107.5 else None))
     # декор: корзина для мусора и ёршик у унитаза
     p.append(cyl(97, 8, 3, 0, 7, M_METAL))
     p.append(cyl(97, 8, 3.3, 7, 7.8, M_METAL))
@@ -182,7 +194,7 @@ DOORS = [
 
 SHELF = {"x0": 106, "y0": 1, "x1": 142, "y1": 18}
 ZONES = [
-    {"id": "bath", "tag": "bath", "x0": 3, "y0": 69, "x1": 27, "y1": 125, "z": 4, "max_h": 30},
+    {"id": "bath", "tag": "bath", "x0": 3, "y0": 69, "x1": 27, "y1": 102, "z": 4, "max_h": 30},
     {"id": "sink", "tag": "sink", "x0": 17, "y0": 0, "x1": 63, "y1": 26, "z": 33, "max_h": 14},
     {"id": "mirror_0", "tag": "mirror", "x0": 24, "y0": 1, "x1": 56, "y1": 7.5, "z": 50, "max_h": 9.5, "container": "mirror"},
     {"id": "mirror_1", "tag": "mirror", "x0": 24, "y0": 1, "x1": 56, "y1": 7.5, "z": 61.5, "max_h": 10, "container": "mirror"},
