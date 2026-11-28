@@ -17,8 +17,8 @@ const EMOTIONS := {
 	"love": ["soft", "happy", "smile", "talk", ["blush", "heart"]],
 }
 const CHARS_PER_SEC := 32.0
-const TEXT_W := 420
-const LINE_H := 11
+const TEXT_W := 206  # в пикселях шрифта (текст рисуется ×2)
+const LINE_H := 20
 
 var lines: Array = []
 var sfx: Sfx
@@ -57,12 +57,13 @@ func _ready() -> void:
 	_mouth = _add_layer(portrait, "mouth_smile")
 	# окно текста
 	add_child(_nine(Rect2(152, 262, 452, 82)))
-	for k in 4:
+	for k in 3:
 		var t := PixelText.new()
 		t.centered = false
 		t.shadow = false
+		t.scale = Vector2(2, 2)
 		t.color = Color("2e2430")
-		t.position = Vector2(170, 276 + k * LINE_H)
+		t.position = Vector2(172, 276 + k * LINE_H)
 		add_child(t)
 		_texts.append(t)
 	_next = Sprite2D.new()

@@ -87,7 +87,9 @@ func play_level(level: int) -> void:
 				return fail("нет предмета над коробкой")
 			var target = null
 			print("   take ", it.id)
-			if wrong_item == null:
+			# «не туда» кладём самую последнюю вещь уровня: её уже никто не загородит
+			var last_item: bool = box == main.boxes[-1] and box.contents.is_empty()
+			if wrong_item == null and last_item:
 				target = find_target(it, false)
 				if target != null:
 					wrong_item = it
