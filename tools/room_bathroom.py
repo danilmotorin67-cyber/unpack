@@ -86,18 +86,26 @@ def vanity_top_tex(x, y, z, face, k, nz):
 
 
 def toilet_tex(x, y, z, face, k, nz):
-    if face == FACE_TOP and z > 14.5:
-        r = math.hypot(x - 81, y - 15)
-        if r < 4.5:
-            return "T"
-        if r < 5.5:
+    # сиденье-кольцо, внутри вода
+    if face == FACE_TOP:
+        r = math.hypot(x - 81, (y - 15.6) * 1.1)
+        if r < 3.6:
+            return "T" if r < 2.6 else "t"
+        if r < 4.6:
             return "C"
     return None
 
 
 def tank_tex(x, y, z, face, k, nz):
-    if face == FACE_TOP and math.hypot(x - 81, y - 3.5) < 1.4:
-        return "s"
+    if face == FACE_TOP and math.hypot(x - 81, y - 4) < 1.6:
+        return "s" if math.hypot(x - 81, y - 4) > 0.7 else "S"
+    return None
+
+
+def lid_tex(x, y, z, face, k, nz):
+    # внутренняя сторона крышки: мягкий овал
+    if face == FACE_LEFT and ((x - 81) / 5.2) ** 2 + ((z - 23) / 6.2) ** 2 < 1:
+        return shift(k, -1)
     return None
 
 
@@ -149,9 +157,16 @@ def prims():
     ]
     # унитаз
     p += [
-        box(72, 0, 18, 90, 7, 36, M_TUB, tank_tex),
-        cyl(81, 13, 4.5, 0, 8, M_TUB),
-        cyl(81, 15, 7.5, 8, 15, M_TUB, toilet_tex),
+        # бачок на стене и задняя часть, которая переходит в чашу
+        box(72, 0, 17, 90, 7.5, 35, M_TUB, tank_tex),
+        box(71.5, 0, 34.5, 90.5, 8, 36, M_TUB),
+        box(75, 0, 0, 87, 10, 17, M_TUB),
+        # постамент и чаша с сиденьем
+        cyl(81, 14, 4.2, 0, 9, M_TUB),
+        cyl(81, 15, 7.2, 9, 14, M_TUB),
+        cyl(81, 15, 7.6, 14, 15.2, M_TUB, toilet_tex),
+        # поднятая крышка опирается на бачок
+        box(74, 8, 15.2, 88, 9.6, 31, M_TUB, lid_tex),
     ]
     # стеллаж
     p += [
@@ -165,12 +180,20 @@ def prims():
     ]
     # шторка у ванны (сдвинута к дальнему краю), карниз
     M_SHOWER = Mat(top="O", left="t", right="t", edge="T")
-    p.append(box(27, 66, 72, 28.2, 128, 73.2, M_METAL))
-    p.append(box(26.4, 104, 24, 28.8, 128, 72, M_SHOWER, folds(1.6, 1, 0.2, faces=(FACE_RIGHT,))))
+    # П-образная штанга: вдоль ванны, оба конца уходят в левую стену
+    p.append(box(0, 66.4, 72, 26.6, 67.6, 73.2, M_METAL))
+    p.append(box(25.4, 66.4, 72, 26.6, 127.6, 73.2, M_METAL))
+    p.append(box(0, 126.4, 72, 26.6, 127.6, 73.2, M_METAL))
+    for fy in (67, 127):  # фланцы крепления к стене
+        p.append(box(0, fy - 1.6, 70.6, 1.2, fy + 1.6, 74.6, M_METAL))
+    # шторка на кольцах; низ заправлен внутрь ванны за бортик
+    for ry in range(105, 127, 3):
+        p.append(box(25, ry, 70.6, 27, ry + 1, 72, M_METAL))
+    p.append(box(25.2, 104, 12, 26.8, 127.4, 70.6, M_SHOWER, folds(1.6, 1, 0.2, faces=(FACE_RIGHT,))))
     # полотенце на крючке у ванны (левая стена)
     M_TOWEL = Mat(top="l", left="L", right="L", edge="z")
-    p.append(box(0, 32, 45, 2.2, 48, 46, M_METAL))
-    p.append(box(0.3, 34, 28, 1.8, 46, 45, M_TOWEL, chain(folds(1.3, 1, 0.8, faces=(FACE_RIGHT,)),
+    p.append(box(0, 18, 45, 2.2, 34, 46, M_METAL))
+    p.append(box(0.3, 20, 28, 1.8, 32, 45, M_TOWEL, chain(folds(1.3, 1, 0.8, faces=(FACE_RIGHT,)),
              lambda x, y, z, f, k, nz: "W" if f == FACE_RIGHT and 30.5 < z < 31.6 else None)))
     # весы на полу
     p.append(box(56, 104, 0, 66, 113, 1.3, M_TUB, lambda x, y, z, f, k, nz: "z" if f == FACE_TOP and 59 < x < 63 and 105.5 < y < 107.5 else None))
