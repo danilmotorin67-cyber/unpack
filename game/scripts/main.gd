@@ -488,11 +488,17 @@ func _spot_candidates(it: Item) -> Array:
 		if not it.is_wall and it.height > z["max_h"]:
 			continue
 		var p := screen_to_zone(z, it.position)
-		if not zone_area(z).grow(SNAP_TOLERANCE).has_point(p):
+		var area := zone_area(z)
+		if not area.grow(SNAP_TOLERANCE).has_point(p):
 			continue
 		var w := zone_to_world(z, p)
-		candidates.append({"zone": z, "p": p, "depth": w.x + w.y + w.z})
-	candidates.sort_custom(func(a, b): return a["depth"] > b["depth"])
+		# точное попадание важнее попадания «с допуском»: иначе край верхней
+		# полки перехватывает вещи, которые ставят на полку под ней
+		candidates.append({"zone": z, "p": p, "exact": area.has_point(p), "depth": w.x + w.y + w.z})
+	candidates.sort_custom(func(a, b):
+		if a["exact"] != b["exact"]:
+			return a["exact"]
+		return a["depth"] > b["depth"])
 	return candidates
 
 

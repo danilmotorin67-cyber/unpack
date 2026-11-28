@@ -74,6 +74,8 @@ func play_level(level: int) -> void:
 				print("   item foot ", it.foot, " h ", it.height, " allowed ", it.allowed)
 				return fail("некуда поставить " + it.id)
 			await drag(it, Iso.to_screen(target))
+			if it.state == Item.State.PLACED and it.wpos.distance_to(target) > 2.5:
+				print("   TARGET ", it.id, " хотели ", target, " встал ", it.zone["id"], " ", it.wpos)
 			if it.state != Item.State.PLACED:
 				return fail("не встал %s (цель %s)" % [it.id, target])
 		await click(bp)  # убрать пустую коробку

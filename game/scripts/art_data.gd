@@ -8,18 +8,18 @@ const PX := 1.3333333333333333  # пикселей на единицу мира
 const ROOM := Vector3(150, 130, 85)
 
 const ITEMS := {
-	"plates": {"anchor": Vector2(15, 15), "foot": Rect2(-5.25, -5.25, 10.5, 10.5), "h": 4.8},
+	"plates": {"anchor": Vector2(12, 12), "foot": Rect2(-5.25, -5.25, 10.5, 10.5), "h": 4.8},
 	"bowl": {"anchor": Vector2(14, 16), "foot": Rect2(-4.8, -4.8, 9.6, 9.6), "h": 6.3},
-	"mug_yellow": {"anchor": Vector2(11, 17), "foot": Rect2(-2.25, -2.25, 4.5, 4.5), "h": 8.25},
-	"mug_blue": {"anchor": Vector2(11, 17), "foot": Rect2(-2.25, -2.25, 4.5, 4.5), "h": 8.25},
+	"mug_yellow": {"anchor": Vector2(11, 14), "foot": Rect2(-2.25, -2.25, 4.5, 4.5), "h": 8.25},
+	"mug_blue": {"anchor": Vector2(11, 14), "foot": Rect2(-2.25, -2.25, 4.5, 4.5), "h": 8.25},
 	"glass": {"anchor": Vector2(7, 15), "foot": Rect2(-1.5, -1.5, 3, 3), "h": 7.5},
-	"pot": {"anchor": Vector2(16, 20), "foot": Rect2(-5.25, -5.25, 10.5, 10.5), "h": 9.9},
+	"pot": {"anchor": Vector2(13, 15), "foot": Rect2(-5.25, -5.25, 10.5, 10.5), "h": 9.9},
 	"pan": {"anchor": Vector2(15, 12), "foot": Rect2(-5.25, -5.25, 10.5, 10.5), "h": 2.4},
 	"kettle": {"anchor": Vector2(15, 22), "foot": Rect2(-3.9, -3.9, 7.8, 7.8), "h": 12.45},
 	"cutting_board": {"anchor": Vector2(19, 13), "foot": Rect2(-6, -3.75, 15.75, 7.5), "h": 1.95},
 	"knife_block": {"anchor": Vector2(11, 22), "foot": Rect2(-1.5, -2.4, 3, 4.8), "h": 12.9},
 	"soap": {"anchor": Vector2(7, 16), "foot": Rect2(-1.5, -1.5, 3, 3), "h": 9.9},
-	"plant": {"anchor": Vector2(10, 22), "foot": Rect2(-3, -3, 6, 6), "h": 14.85},
+	"plant": {"anchor": Vector2(10, 17), "foot": Rect2(-3, -3, 6, 6), "h": 14.85},
 	"milk": {"anchor": Vector2(8, 19), "foot": Rect2(-1.5, -1.5, 3, 3), "h": 11.4},
 	"cheese": {"anchor": Vector2(10, 11), "foot": Rect2(-2.4, -1.5, 4.8, 3), "h": 3.9},
 	"spices": {"anchor": Vector2(7, 12), "foot": Rect2(-1.5, -1.88, 3, 3.75), "h": 5.85},
